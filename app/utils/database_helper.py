@@ -1,5 +1,11 @@
 from sqlalchemy.orm import Session
-from app.models import ActivityLog
+import uuid
+import logging
+from datetime import datetime
+from sqlalchemy.orm import Session
+from ..models.activity_log import ActivityLog
+
+logger = logging.getLogger(__name__)
 
 def log_activity(
     db: Session,
@@ -27,7 +33,8 @@ def log_activity(
         db.add(activity)
         db.commit()
     except Exception as e:
-        print(f"Failed to log activity: {e}")
+        logger.error(f"Failed to log activity: {e}")
+        db.rollback()
 
 def create_slug_from_name(name: str) -> str:
     """Create a URL-safe slug from a name"""
