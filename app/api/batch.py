@@ -84,13 +84,16 @@ def table_to_batch_response(table: RestaurantTable) -> BatchTableResponse:
 def sync_guest_table_relationship_batch(db: Session, guest_id: str, table_id: str = None, old_table_id: str = None):
     """
     Optimized version of guest-table relationship sync for batch operations
+    ENFORCES: Only occupied tables can have currentGuestId (business rule)
     """
     # Clear old table assignment if guest was previously assigned to a different table
     if old_table_id and old_table_id != table_id:
         old_table = db.query(RestaurantTable).filter(RestaurantTable.id == old_table_id).first()
         if old_table and old_table.current_guest_id == guest_id:
             old_table.current_guest_id = None
-            old_table.status = "available"
+            # If table is not occupied, ensure it's available
+            if old_table.status == "occupied":
+                old_table.status = "available"
     
     # Set new table assignment
     if table_id:
@@ -103,9 +106,16 @@ def sync_guest_table_relationship_batch(db: Session, guest_id: str, table_id: st
                     other_guest.table_id = None
                     other_guest.status = "waitlist"
             
-            # Assign table to new guest
+            # Assign table to new guest and set status to occupied
             table.current_guest_id = guest_id
-            table.status = "occupied"
+            table.status = "occupied"  # ENFORCE: Only occupied tables have currentGuestId
+    else:
+        # If no table_id provided, ensure no table claims this guest
+        tables_with_guest = db.query(RestaurantTable).filter(RestaurantTable.current_guest_id == guest_id).all()
+        for table in tables_with_guest:
+            table.current_guest_id = None
+            if table.status == "occupied":
+                table.status = "available"
 
 @router.post("/{restaurant_id}/batch-update", response_model=BatchUpdateResponse)
 async def batch_update(

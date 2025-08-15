@@ -14,12 +14,16 @@ def sync_guest_table_relationship(db: Session, guest_id: str, table_id: Optional
     Synchronize the bidirectional relationship between guest and table.
     When a guest is assigned to a table, update the table's current_guest_id.
     When a guest is removed from a table, clear the table's current_guest_id.
+    ENFORCES: Only occupied tables can have currentGuestId (business rule)
     """
     # Clear old table assignment if guest was previously assigned to a different table
     if old_table_id and old_table_id != table_id:
         old_table = db.query(RestaurantTable).filter(RestaurantTable.id == old_table_id).first()
         if old_table and old_table.current_guest_id == guest_id:
             old_table.current_guest_id = None
+            # If table is not occupied, ensure it's available
+            if old_table.status == "occupied":
+                old_table.status = "available"
     
     # Set new table assignment
     if table_id:
@@ -32,9 +36,16 @@ def sync_guest_table_relationship(db: Session, guest_id: str, table_id: Optional
                     other_guest.table_id = None
                     other_guest.status = "waitlist"  # Reset status when table is taken
             
-            # Assign table to new guest
+            # Assign table to new guest and set status to occupied
             table.current_guest_id = guest_id
-            table.status = "occupied" if table_id else "available"
+            table.status = "occupied"  # ENFORCE: Only occupied tables have currentGuestId
+    else:
+        # If no table_id provided, ensure no table claims this guest
+        tables_with_guest = db.query(RestaurantTable).filter(RestaurantTable.current_guest_id == guest_id).all()
+        for table in tables_with_guest:
+            table.current_guest_id = None
+            if table.status == "occupied":
+                table.status = "available"
 
 def handle_guest_status_change(db: Session, guest: Guest, old_status: str, new_status: str):
     """
