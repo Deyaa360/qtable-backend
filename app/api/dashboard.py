@@ -40,6 +40,8 @@ def table_to_minimal_response(table: RestaurantTable) -> MinimalTableResponse:
     return MinimalTableResponse(
         id=str(table.id),
         tableNumber=table.table_number,
+        capacity=table.capacity,  # ADDED: Required for iOS app compatibility
+        position=Position(x=table.position_x, y=table.position_y),  # ADDED: Required for floor plan positioning
         status=table.status,
         currentGuestId=str(table.current_guest_id) if table.current_guest_id else None,
         lastUpdated=table.updated_at
@@ -159,20 +161,20 @@ async def get_dashboard_data(
         occupancy_rate = (occupied_tables / total_tables) if total_tables > 0 else 0.0
         
         stats = DashboardStatsResponse(
-            totalGuests=len(all_guests),
-            totalTables=total_tables,
-            occupancyRate=round(occupancy_rate, 2),
-            guestsByStatus=guest_status_counts,
-            tablesByStatus=table_status_counts
+            total_guests=len(all_guests),
+            total_tables=total_tables,
+            occupancy_rate=round(occupancy_rate, 2),
+            guests_by_status=guest_status_counts,
+            tables_by_status=table_status_counts
         )
     else:
         # For delta updates, don't recalculate expensive stats
         stats = DashboardStatsResponse(
-            totalGuests=0,
-            totalTables=0,
-            occupancyRate=0.0,
-            guestsByStatus={},
-            tablesByStatus={}
+            total_guests=0,
+            total_tables=0,
+            occupancy_rate=0.0,
+            guests_by_status={},
+            tables_by_status={}
         )
     
     logger.info(f"Dashboard data response: {len(guest_responses)} guests, {len(table_responses)} tables")
@@ -319,20 +321,20 @@ async def get_dashboard_data_v1(
         occupancy_rate = (occupied_tables / total_tables) if total_tables > 0 else 0.0
         
         stats = DashboardStatsResponse(
-            totalGuests=len(all_guests),
-            totalTables=total_tables,
-            occupancyRate=round(occupancy_rate, 2),
-            guestsByStatus=guest_status_counts,
-            tablesByStatus=table_status_counts
+            total_guests=len(all_guests),
+            total_tables=total_tables,
+            occupancy_rate=round(occupancy_rate, 2),
+            guests_by_status=guest_status_counts,
+            tables_by_status=table_status_counts
         )
     else:
         # For delta updates, don't recalculate expensive stats
         stats = DashboardStatsResponse(
-            totalGuests=0,
-            totalTables=0,
-            occupancyRate=0.0,
-            guestsByStatus={},
-            tablesByStatus={}
+            total_guests=0,
+            total_tables=0,
+            occupancy_rate=0.0,
+            guests_by_status={},
+            tables_by_status={}
         )
     
     logger.info(f"V1 Dashboard data response: {len(guest_responses)} guests, {len(table_responses)} tables")
@@ -432,20 +434,20 @@ async def get_restaurant_dashboard_data(
         occupancy_rate = (occupied_tables / total_tables) if total_tables > 0 else 0.0
         
         stats = DashboardStatsResponse(
-            totalGuests=len(all_guests),
-            totalTables=total_tables,
-            occupancyRate=round(occupancy_rate, 2),
-            guestsByStatus=guest_status_counts,
-            tablesByStatus=table_status_counts
+            total_guests=len(all_guests),
+            total_tables=total_tables,
+            occupancy_rate=round(occupancy_rate, 2),
+            guests_by_status=guest_status_counts,
+            tables_by_status=table_status_counts
         )
     else:
         # For delta updates, don't recalculate expensive stats
         stats = DashboardStatsResponse(
-            totalGuests=0,
-            totalTables=0,
-            occupancyRate=0.0,
-            guestsByStatus={},
-            tablesByStatus={}
+            total_guests=0,
+            total_tables=0,
+            occupancy_rate=0.0,
+            guests_by_status={},
+            tables_by_status={}
         )
     
     logger.info(f"Restaurant dashboard data response: {len(guest_responses)} guests, {len(table_responses)} tables")

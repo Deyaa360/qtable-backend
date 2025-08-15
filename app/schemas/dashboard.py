@@ -1,6 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
+from .table import Position
 
 # Dashboard optimized schemas
 class MinimalGuestResponse(BaseModel):
@@ -19,6 +20,8 @@ class MinimalTableResponse(BaseModel):
     """Minimal table data for dashboard performance"""
     id: str
     tableNumber: str
+    capacity: int  # ADDED: Required for iOS app compatibility
+    position: Position  # ADDED: Required for floor plan positioning
     status: str
     currentGuestId: Optional[str] = None
     lastUpdated: datetime
@@ -28,11 +31,11 @@ class MinimalTableResponse(BaseModel):
 
 class DashboardStatsResponse(BaseModel):
     """Dashboard statistics for quick overview"""
-    totalGuests: int
-    totalTables: int
-    occupancyRate: float
-    guestsByStatus: dict  # {"waitlist": 5, "seated": 10, etc.}
-    tablesByStatus: dict  # {"available": 8, "occupied": 12, etc.}
+    total_guests: int
+    total_tables: int
+    occupancy_rate: float
+    guests_by_status: dict  # {"waitlist": 5, "seated": 10, etc.}
+    tables_by_status: dict  # {"available": 8, "occupied": 12, etc.}
 
 class DashboardDataResponse(BaseModel):
     """Optimized dashboard data response"""
