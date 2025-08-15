@@ -2,12 +2,39 @@ from fastapi import APIRouter, Depends, HTTPException, status, Path
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
-from app.models import Guest, Reservation, Restaurant, User
+from app.models import Guest, Reservation, Restaurant, User, RestaurantTable
 from app.schemas import GuestResponse, GuestCreate, GuestUpdate
 from app.dependencies import get_current_user, verify_restaurant_access
 from app.utils.database_helper import log_activity
 
 router = APIRouter(prefix="/restaurants", tags=["guests"])
+
+def sync_guest_table_relationship(db: Session, guest_id: str, table_id: Optional[str], old_table_id: Optional[str] = None):
+    """
+    Synchronize the bidirectional relationship between guest and table.
+    When a guest is assigned to a table, update the table's current_guest_id.
+    When a guest is removed from a table, clear the table's current_guest_id.
+    """
+    # Clear old table assignment if guest was previously assigned to a different table
+    if old_table_id and old_table_id != table_id:
+        old_table = db.query(RestaurantTable).filter(RestaurantTable.id == old_table_id).first()
+        if old_table and old_table.current_guest_id == guest_id:
+            old_table.current_guest_id = None
+    
+    # Set new table assignment
+    if table_id:
+        table = db.query(RestaurantTable).filter(RestaurantTable.id == table_id).first()
+        if table:
+            # Clear any other guest assigned to this table
+            if table.current_guest_id and table.current_guest_id != guest_id:
+                other_guest = db.query(Guest).filter(Guest.id == table.current_guest_id).first()
+                if other_guest:
+                    other_guest.table_id = None
+                    other_guest.status = "waitlist"  # Reset status when table is taken
+            
+            # Assign table to new guest
+            table.current_guest_id = guest_id
+            table.status = "occupied" if table_id else "available"
 
 def guest_to_response(guest: Guest) -> GuestResponse:
     """Convert database guest model to response schema"""
@@ -27,6 +54,16 @@ def guest_to_response(guest: Guest) -> GuestResponse:
         notes=guest.notes,
         dietaryRestrictions=guest.dietary_restrictions or [],
         specialRequests=guest.special_requests,
+        
+        # Table assignment fields
+        partySize=guest.party_size,
+        status=guest.status,
+        tableId=guest.table_id,
+        reservationTime=guest.reservation_time,
+        checkInTime=guest.check_in_time,
+        seatedTime=guest.seated_time,
+        finishedTime=guest.finished_time,
+        
         createdAt=guest.created_at,
         lastUpdated=guest.updated_at
     )
@@ -62,7 +99,16 @@ async def create_guest(
         phone=guest_data.phone,
         notes=guest_data.notes,
         dietary_restrictions=guest_data.dietary_restrictions,
-        special_requests=guest_data.special_requests
+        special_requests=guest_data.special_requests,
+        
+        # Table assignment fields
+        party_size=guest_data.party_size,
+        status=guest_data.status,
+        table_id=guest_data.table_id,
+        reservation_time=guest_data.reservation_time,
+        check_in_time=guest_data.check_in_time,
+        seated_time=guest_data.seated_time,
+        finished_time=guest_data.finished_time
     )
     
     db.add(guest)
@@ -149,6 +195,29 @@ async def update_guest(
         guest.dietary_restrictions = guest_data.dietary_restrictions
     if guest_data.special_requests is not None:
         guest.special_requests = guest_data.special_requests
+    
+    # Store old table_id for relationship sync
+    old_table_id = guest.table_id
+    
+    # Update table assignment fields
+    if guest_data.party_size is not None:
+        guest.party_size = guest_data.party_size
+    if guest_data.status is not None:
+        guest.status = guest_data.status
+    if guest_data.table_id is not None:
+        guest.table_id = guest_data.table_id
+    if guest_data.reservation_time is not None:
+        guest.reservation_time = guest_data.reservation_time
+    if guest_data.check_in_time is not None:
+        guest.check_in_time = guest_data.check_in_time
+    if guest_data.seated_time is not None:
+        guest.seated_time = guest_data.seated_time
+    if guest_data.finished_time is not None:
+        guest.finished_time = guest_data.finished_time
+    
+    # Sync guest-table relationship if table assignment changed
+    if guest_data.table_id is not None and guest.table_id != old_table_id:
+        sync_guest_table_relationship(db, guest_id, guest.table_id, old_table_id)
     
     db.commit()
     db.refresh(guest)

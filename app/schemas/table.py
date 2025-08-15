@@ -44,6 +44,7 @@ class TableUpdate(BaseModel):
     shape: Optional[TableShape] = None
     section: Optional[str] = None
     current_guest_id: Optional[str] = None
+    currentGuestId: Optional[str] = None  # Support iOS camelCase format
 
 # Table response schema (matches iOS RestaurantTable exactly)
 class TableResponse(BaseModel):

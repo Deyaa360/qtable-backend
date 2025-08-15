@@ -15,6 +15,15 @@ class GuestCreate(BaseModel):
     notes: Optional[str] = None
     dietary_restrictions: Optional[List[str]] = None
     special_requests: Optional[str] = None
+    
+    # Table assignment fields
+    party_size: Optional[int] = None
+    status: Optional[str] = "waitlist"
+    table_id: Optional[str] = None
+    reservation_time: Optional[datetime] = None
+    check_in_time: Optional[datetime] = None
+    seated_time: Optional[datetime] = None
+    finished_time: Optional[datetime] = None
 
 class GuestUpdate(BaseModel):
     # All fields optional for updates
@@ -25,6 +34,15 @@ class GuestUpdate(BaseModel):
     notes: Optional[str] = None
     dietary_restrictions: Optional[List[str]] = None
     special_requests: Optional[str] = None
+    
+    # Table assignment fields for updates
+    party_size: Optional[int] = None
+    status: Optional[str] = None
+    table_id: Optional[str] = None
+    reservation_time: Optional[datetime] = None
+    check_in_time: Optional[datetime] = None
+    seated_time: Optional[datetime] = None
+    finished_time: Optional[datetime] = None
 
 class GuestResponse(BaseModel):
     id: str
@@ -37,6 +55,16 @@ class GuestResponse(BaseModel):
     notes: Optional[str] = None
     dietaryRestrictions: List[str]
     specialRequests: Optional[str] = None
+    
+    # Table assignment fields in response
+    partySize: Optional[int] = None
+    status: Optional[str] = None
+    tableId: Optional[str] = None
+    reservationTime: Optional[datetime] = None
+    checkInTime: Optional[datetime] = None
+    seatedTime: Optional[datetime] = None
+    finishedTime: Optional[datetime] = None
+    
     createdAt: datetime
     lastUpdated: datetime
 

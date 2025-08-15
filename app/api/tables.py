@@ -84,8 +84,16 @@ async def update_table(
         table.shape = table_data.shape
     if table_data.section is not None:
         table.section = table_data.section
+    
+    # Handle both current_guest_id and currentGuestId (for iOS compatibility)
+    guest_id_to_set = None
     if table_data.current_guest_id is not None:
-        table.current_guest_id = table_data.current_guest_id
+        guest_id_to_set = table_data.current_guest_id
+    elif table_data.currentGuestId is not None:
+        guest_id_to_set = table_data.currentGuestId
+    
+    if guest_id_to_set is not None:
+        table.current_guest_id = guest_id_to_set
     
     # Save changes
     db.commit()

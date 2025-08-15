@@ -17,6 +17,17 @@ class Guest(Base):
     email = Column(String(255))
     phone = Column(String(20))
     
+    # Table Assignment Fields (for current visit/reservation)
+    party_size = Column(Integer)
+    status = Column(String(20), default='waitlist')  # confirmed, arrived, seated, finished, cancelled, no_show, running_late, waitlist
+    table_id = Column(String, ForeignKey("restaurant_tables.id"))
+    
+    # Timing Fields
+    reservation_time = Column(DateTime)
+    check_in_time = Column(DateTime)
+    seated_time = Column(DateTime)
+    finished_time = Column(DateTime)
+    
     # Preferences
     dietary_restrictions = Column(JSON, default=[])
     special_requests = Column(Text)
@@ -30,3 +41,4 @@ class Guest(Base):
     # Relationships
     # restaurant = relationship("Restaurant", back_populates="guests")  # Temporarily removed
     reservations = relationship("Reservation", back_populates="guest")
+    table = relationship("RestaurantTable", foreign_keys=[table_id])
