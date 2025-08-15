@@ -36,6 +36,33 @@ def sync_guest_table_relationship(db: Session, guest_id: str, table_id: Optional
             table.current_guest_id = guest_id
             table.status = "occupied" if table_id else "available"
 
+def handle_guest_status_change(db: Session, guest: Guest, old_status: str, new_status: str):
+    """
+    Handle automatic table clearing when guest status changes from "Seated" to any other status.
+    This implements the business logic required by the iOS frontend.
+    """
+    from datetime import datetime
+    
+    # If guest was seated and is no longer seated, clear the table
+    if old_status == "Seated" and new_status != "Seated":
+        if guest.table_id:
+            # Find and clear the table
+            table = db.query(RestaurantTable).filter(RestaurantTable.id == guest.table_id).first()
+            if table:
+                table.status = "available"
+                table.current_guest_id = None
+                # table.updated_at will be automatically updated by SQLAlchemy
+            
+            # Clear guest's table assignment
+            guest.table_id = None
+        
+        # Set finished time if status is finished
+        if new_status == "Finished":
+            guest.finished_time = datetime.utcnow()
+    
+    # Update guest status
+    guest.status = new_status
+
 def guest_to_response(guest: Guest) -> GuestResponse:
     """Convert database guest model to response schema"""
     # Combine first and last name for the name field
@@ -173,12 +200,13 @@ async def update_guest(
             detail="Guest not found"
         )
     
-    # Store old data for logging
+    # Store old data for logging and status change detection
     old_data = {
         "name": f"{guest.first_name} {guest.last_name}",
         "email": guest.email,
         "phone": guest.phone
     }
+    old_status = guest.status  # Store old status for automatic table clearing
     
     # Update fields that were provided
     if guest_data.first_name is not None:
@@ -202,8 +230,6 @@ async def update_guest(
     # Update table assignment fields
     if guest_data.party_size is not None:
         guest.party_size = guest_data.party_size
-    if guest_data.status is not None:
-        guest.status = guest_data.status
     if guest_data.table_id is not None:
         guest.table_id = guest_data.table_id
     if guest_data.reservation_time is not None:
@@ -214,6 +240,10 @@ async def update_guest(
         guest.seated_time = guest_data.seated_time
     if guest_data.finished_time is not None:
         guest.finished_time = guest_data.finished_time
+    
+    # Handle status changes with automatic table clearing
+    if guest_data.status is not None:
+        handle_guest_status_change(db, guest, old_status, guest_data.status)
     
     # Sync guest-table relationship if table assignment changed
     if guest_data.table_id is not None and guest.table_id != old_table_id:

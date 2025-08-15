@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Path
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from app.database import get_db
 from app.models import Guest, RestaurantTable, Restaurant, User
@@ -12,6 +12,31 @@ import logging
 
 router = APIRouter(prefix="/restaurants", tags=["batch-operations"])
 logger = logging.getLogger(__name__)
+
+def handle_guest_status_change_batch(db: Session, guest: Guest, old_status: str, new_status: str):
+    """
+    Handle automatic table clearing when guest status changes from "Seated" to any other status.
+    This implements the business logic required by the iOS frontend for batch operations.
+    """
+    # If guest was seated and is no longer seated, clear the table
+    if old_status == "Seated" and new_status != "Seated":
+        if guest.table_id:
+            # Find and clear the table
+            table = db.query(RestaurantTable).filter(RestaurantTable.id == guest.table_id).first()
+            if table:
+                table.status = "available"
+                table.current_guest_id = None
+                # table.updated_at will be automatically updated by SQLAlchemy
+            
+            # Clear guest's table assignment
+            guest.table_id = None
+        
+        # Set finished time if status is finished
+        if new_status == "Finished":
+            guest.finished_time = datetime.utcnow()
+    
+    # Update guest status
+    guest.status = new_status
 
 def guest_to_batch_response(guest: Guest) -> BatchGuestResponse:
     """Convert database guest model to batch response schema"""
@@ -110,12 +135,13 @@ async def batch_update(
                         errors.append(f"Guest {guest_update.id} not found")
                         continue
                     
-                    # Store old table_id for relationship sync
+                    # Store old table_id and status for relationship sync and status change detection
                     old_table_id = guest.table_id
+                    old_status = guest.status
                     
-                    # Update guest fields (handle both camelCase and snake_case)
+                    # Handle status changes with automatic table clearing
                     if guest_update.status is not None:
-                        guest.status = guest_update.status
+                        handle_guest_status_change_batch(db, guest, old_status, guest_update.status)
                     
                     # Handle table assignment (both naming conventions)
                     table_id_to_set = guest_update.assignedTableId or guest_update.table_id
