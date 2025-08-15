@@ -9,7 +9,7 @@ class Guest(Base):
     __tablename__ = "guests"
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    # restaurant_id = Column(String, ForeignKey("restaurants.id"), nullable=False)  # Temporarily removed
+    restaurant_id = Column(String, ForeignKey("restaurants.id"), nullable=False)  # CRITICAL: Multi-tenant isolation
     
     # Contact Info
     first_name = Column(String(100))
@@ -39,6 +39,6 @@ class Guest(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     
     # Relationships
-    # restaurant = relationship("Restaurant", back_populates="guests")  # Temporarily removed
+    restaurant = relationship("Restaurant", back_populates="guests")  # CRITICAL: Multi-tenant relationship
     reservations = relationship("Reservation", back_populates="guest")
     table = relationship("RestaurantTable", foreign_keys=[table_id])

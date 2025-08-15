@@ -33,5 +33,5 @@ class Restaurant(Base):
     users = relationship("User", back_populates="restaurant", cascade="all, delete-orphan")
     tables = relationship("RestaurantTable", back_populates="restaurant", cascade="all, delete-orphan")
     reservations = relationship("Reservation", back_populates="restaurant", cascade="all, delete-orphan")
-    # guests = relationship("Guest", back_populates="restaurant", cascade="all, delete-orphan")  # Temporarily removed
+    guests = relationship("Guest", back_populates="restaurant", cascade="all, delete-orphan")
     activity_logs = relationship("ActivityLog", back_populates="restaurant", cascade="all, delete-orphan")

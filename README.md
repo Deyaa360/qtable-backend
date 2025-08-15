@@ -32,6 +32,8 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+**Note for Windows:** After activating the virtual environment, you can use either `python` or the full path `venv\Scripts\python.exe` for commands.
+
 ### 2. Database Setup
 
 #### Option A: Railway (Recommended for Production)
@@ -81,10 +83,17 @@ alembic upgrade head
 ### 5. Run the Server
 
 ```bash
-# Development server
+# Development server (Windows)
+venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Development server (macOS/Linux)
+source venv/bin/activate
 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-# Production server
+# Production server (Windows)
+venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# Production server (macOS/Linux)
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 

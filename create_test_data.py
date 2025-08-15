@@ -174,7 +174,7 @@ def create_test_data():
             if not existing_guest:
                 guest = Guest(
                     id=guest_data["id"],
-                    restaurant_id="test-restaurant-1",
+                    restaurant_id="test-restaurant-1",  # CRITICAL: Multi-tenant isolation
                     first_name=guest_data["first_name"],
                     last_name=guest_data["last_name"],
                     email=guest_data["email"],
