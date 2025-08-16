@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 import uvicorn
 from app.config import settings
 from app.api import auth, tables, reservations, guests, websockets
-from app.api import batch, dashboard
+from app.api import batch, dashboard, atomic, sync
 
 # Create FastAPI app
 app = FastAPI(
@@ -62,6 +62,8 @@ app.include_router(websockets.router)
 app.include_router(batch.router)  # High-performance batch operations
 app.include_router(dashboard.router)  # New /api/v1/dashboard endpoints
 app.include_router(dashboard.restaurant_router)  # Original /restaurants/{id}/dashboard-data (compatibility)
+app.include_router(atomic.router)  # Enterprise-grade atomic operations
+app.include_router(sync.router)  # Full and delta sync endpoints
 
 # Startup event
 @app.on_event("startup")

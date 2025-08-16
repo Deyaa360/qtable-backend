@@ -1,13 +1,63 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Path
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from datetime import datetime
 from app.database import get_db
 from app.models import Guest, Reservation, Restaurant, User, RestaurantTable
 from app.schemas import GuestResponse, GuestCreate, GuestUpdate
 from app.dependencies import get_current_user, verify_restaurant_access
 from app.utils.database_helper import log_activity
+from app.api.websockets import broadcast_guest_created, broadcast_guest_updated, broadcast_guest_deleted, broadcast_table_updated, broadcast_delta_update
+import logging
 
 router = APIRouter(prefix="/restaurants", tags=["guests"])
+logger = logging.getLogger(__name__)
+
+def validate_walk_in_guest(guest_data: GuestCreate) -> GuestCreate:
+    """
+    Validate walk-in guest data according to iOS requirements.
+    Enforces business rules for walk-in guests.
+    """
+    # If status is Waitlist, this is a walk-in guest
+    if guest_data.status == "Waitlist":
+        logger.info(f"Validating walk-in guest: {guest_data.first_name} {guest_data.last_name}, party_size: {guest_data.party_size}")
+        
+        # Required fields for walk-ins
+        if not guest_data.first_name or guest_data.first_name.strip() == "":
+            raise HTTPException(
+                status_code=400,
+                detail="first_name is required for walk-in guests"
+            )
+        
+        if not guest_data.party_size or guest_data.party_size < 1:
+            raise HTTPException(
+                status_code=400,
+                detail="party_size must be a positive integer for walk-in guests"
+            )
+        
+        # Forbidden fields for walk-ins - these should be null
+        forbidden_fields = []
+        if guest_data.reservation_time is not None:
+            forbidden_fields.append("reservation_time")
+        if guest_data.table_id is not None:
+            forbidden_fields.append("table_id")
+        if guest_data.seated_time is not None:
+            forbidden_fields.append("seated_time")
+        if guest_data.finished_time is not None:
+            forbidden_fields.append("finished_time")
+        
+        if forbidden_fields:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Walk-in guests cannot have these fields set: {', '.join(forbidden_fields)}"
+            )
+        
+        # Auto-set check_in_time if not provided
+        if guest_data.check_in_time is None:
+            guest_data.check_in_time = datetime.utcnow()
+            logger.info(f"Auto-set check_in_time for walk-in guest: {guest_data.check_in_time}")
+    
+    return guest_data
 
 def sync_guest_table_relationship(db: Session, guest_id: str, table_id: Optional[str], old_table_id: Optional[str] = None):
     """
@@ -47,7 +97,7 @@ def sync_guest_table_relationship(db: Session, guest_id: str, table_id: Optional
             if table.status == "occupied":
                 table.status = "available"
 
-def handle_guest_status_change(db: Session, guest: Guest, old_status: str, new_status: str):
+async def handle_guest_status_change(db: Session, guest: Guest, old_status: str, new_status: str):
     """
     Handle automatic table clearing when guest status changes from "Seated" to any other status.
     This implements the business logic required by the iOS frontend.
@@ -63,6 +113,12 @@ def handle_guest_status_change(db: Session, guest: Guest, old_status: str, new_s
                 table.status = "available"
                 table.current_guest_id = None
                 # table.updated_at will be automatically updated by SQLAlchemy
+                
+                # Broadcast table update to all connected iOS devices
+                try:
+                    await broadcast_table_updated(table)
+                except Exception as e:
+                    logger.warning(f"Failed to broadcast table_updated: {e}")
             
             # Clear guest's table assignment
             guest.table_id = None
@@ -128,46 +184,74 @@ async def create_guest(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create a new guest profile"""
+    """
+    Create a new guest profile.
+    Supports both reservations and walk-in guests with proper validation.
+    """
+    
+    # Validate walk-in guest business rules
+    validated_guest_data = validate_walk_in_guest(guest_data)
+    
+    # Create guest with validated data
     guest = Guest(
-        # restaurant_id=restaurant_id,  # Temporarily disabled for testing
-        first_name=guest_data.first_name,
-        last_name=guest_data.last_name,
-        email=guest_data.email,
-        phone=guest_data.phone,
-        notes=guest_data.notes,
-        dietary_restrictions=guest_data.dietary_restrictions,
-        special_requests=guest_data.special_requests,
+        restaurant_id=restaurant_id,  # Re-enabled restaurant_id association
+        first_name=validated_guest_data.first_name,
+        last_name=validated_guest_data.last_name,
+        email=validated_guest_data.email,
+        phone=validated_guest_data.phone,
+        notes=validated_guest_data.notes,
+        dietary_restrictions=validated_guest_data.dietary_restrictions,
+        special_requests=validated_guest_data.special_requests,
         
         # Table assignment fields
-        party_size=guest_data.party_size,
-        status=guest_data.status,
-        table_id=guest_data.table_id,
-        reservation_time=guest_data.reservation_time,
-        check_in_time=guest_data.check_in_time,
-        seated_time=guest_data.seated_time,
-        finished_time=guest_data.finished_time
+        party_size=validated_guest_data.party_size,
+        status=validated_guest_data.status or "Waitlist",  # Default to Waitlist for walk-ins
+        table_id=validated_guest_data.table_id,
+        reservation_time=validated_guest_data.reservation_time,
+        check_in_time=validated_guest_data.check_in_time,
+        seated_time=validated_guest_data.seated_time,
+        finished_time=validated_guest_data.finished_time
     )
     
-    db.add(guest)
-    db.commit()
-    db.refresh(guest)
-    
-    # Log activity
-    log_activity(
-        db=db,
-        restaurant_id=restaurant_id,
-        user_id=str(current_user.id),
-        action="guest_create",
-        entity_type="guest",
-        entity_id=str(guest.id),
-        new_data={
-            "name": f"{guest.first_name} {guest.last_name}",
-            "email": guest.email
-        }
-    )
-    
-    return guest_to_response(guest)
+    try:
+        db.add(guest)
+        db.commit()
+        db.refresh(guest)
+        
+        # Log activity with appropriate action type
+        action_type = "walk_in_create" if guest.status == "Waitlist" else "guest_create"
+        log_activity(
+            db=db,
+            restaurant_id=restaurant_id,
+            user_id=str(current_user.id),
+            action=action_type,
+            entity_type="guest",
+            entity_id=str(guest.id),
+            new_data={
+                "name": f"{guest.first_name} {guest.last_name}",
+                "email": guest.email,
+                "party_size": guest.party_size,
+                "status": guest.status
+            }
+        )
+        
+        logger.info(f"Successfully created guest: {guest.first_name} {guest.last_name} (ID: {guest.id}, Status: {guest.status})")
+        
+        # Broadcast guest creation to all connected iOS devices
+        try:
+            await broadcast_guest_created(guest)
+        except Exception as e:
+            logger.warning(f"Failed to broadcast guest_created: {e}")
+        
+        return guest_to_response(guest)
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating guest: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create guest: {str(e)}"
+        )
 
 @router.get("/{restaurant_id}/guests/{guest_id}", response_model=GuestResponse)
 async def get_guest(
@@ -254,7 +338,7 @@ async def update_guest(
     
     # Handle status changes with automatic table clearing
     if guest_data.status is not None:
-        handle_guest_status_change(db, guest, old_status, guest_data.status)
+        await handle_guest_status_change(db, guest, old_status, guest_data.status)
     
     # Sync guest-table relationship if table assignment changed
     if guest_data.table_id is not None and guest.table_id != old_table_id:
@@ -280,6 +364,12 @@ async def update_guest(
         old_data=old_data,
         new_data=new_data
     )
+    
+    # Broadcast guest update to all connected iOS devices
+    try:
+        await broadcast_guest_updated(guest)
+    except Exception as e:
+        logger.warning(f"Failed to broadcast guest_updated: {e}")
     
     return guest_to_response(guest)
 
@@ -315,6 +405,9 @@ async def delete_guest(
             detail="Cannot delete guest with active reservations"
         )
     
+    # Store guest_id for broadcast before deletion
+    guest_id_for_broadcast = str(guest.id)
+    
     db.delete(guest)
     db.commit()
     
@@ -325,11 +418,146 @@ async def delete_guest(
         user_id=str(current_user.id),
         action="guest_delete",
         entity_type="guest",
-        entity_id=str(guest.id),
+        entity_id=guest_id_for_broadcast,
         old_data={
             "name": f"{guest.first_name} {guest.last_name}",
             "email": guest.email
         }
     )
     
+    # Broadcast guest deletion to all connected iOS devices
+    try:
+        await broadcast_guest_deleted(guest_id_for_broadcast)
+    except Exception as e:
+        logger.warning(f"Failed to broadcast guest_deleted: {e}")
+    
     return {"success": True, "message": "Guest deleted successfully"}
+
+@router.put("/{restaurant_id}/guests/{guest_id}/status/atomic", response_model=dict)
+async def update_guest_status_atomic(
+    new_status: str,
+    restaurant_id: str = Path(..., description="Restaurant ID"),
+    guest_id: str = Path(..., description="Guest ID"),
+    restaurant: Restaurant = Depends(verify_restaurant_access),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Atomically update guest status with automatic table clearing
+    
+    This endpoint implements the enterprise-grade atomic operations required by iOS:
+    - Updates guest status
+    - Automatically clears table if status is terminal (finished, cancelled, no-show)
+    - Broadcasts both changes as a single atomic transaction
+    - Full rollback on any failure
+    """
+    import uuid
+    from datetime import datetime, timezone
+    
+    # Start atomic transaction
+    transaction_id = str(uuid.uuid4())
+    logger.info(f"Starting atomic guest status update {transaction_id} for guest {guest_id} -> {new_status}")
+    
+    try:
+        # Start database transaction
+        with db.begin():
+            # Get guest
+            guest = db.query(Guest).filter(Guest.id == guest_id).first()
+            if not guest:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Guest not found"
+                )
+            
+            old_status = guest.status
+            old_table_id = guest.table_id
+            changes = []
+            
+            # Update guest status
+            guest.status = new_status
+            guest.updated_at = datetime.now(timezone.utc)
+            
+            # Set finished time for terminal statuses
+            if new_status == "Finished":
+                guest.finished_time = datetime.now(timezone.utc)
+            
+            # Add guest change to broadcast
+            changes.append({
+                "entity_type": "guest",
+                "entity_id": guest_id,
+                "action": "update",
+                "data": {
+                    "id": str(guest.id),
+                    "name": f"{guest.first_name or ''} {guest.last_name or ''}".strip() or "Unknown Guest",
+                    "status": new_status,
+                    "table_id": str(guest.table_id) if guest.table_id else None,
+                    "finished_time": guest.finished_time.isoformat() if guest.finished_time else None
+                }
+            })
+            
+            # Handle automatic table clearing for terminal statuses
+            if new_status in ["Finished", "Cancelled", "No Show"] and old_table_id:
+                table = db.query(RestaurantTable).filter(RestaurantTable.id == old_table_id).first()
+                if table:
+                    # Clear table
+                    table.status = "available"
+                    table.current_guest_id = None
+                    table.updated_at = datetime.now(timezone.utc)
+                    
+                    # Clear guest's table assignment
+                    guest.table_id = None
+                    
+                    # Add table change to broadcast
+                    changes.append({
+                        "entity_type": "table",
+                        "entity_id": str(table.id),
+                        "action": "update",
+                        "data": {
+                            "id": str(table.id),
+                            "table_number": table.table_number,
+                            "status": "available",
+                            "current_guest_id": None
+                        }
+                    })
+            
+            # Commit transaction
+            db.commit()
+            db.refresh(guest)
+            
+            # Log activity
+            log_activity(
+                db=db,
+                restaurant_id=restaurant_id,
+                user_id=str(current_user.id),
+                action="atomic_guest_status_update",
+                entity_type="guest",
+                entity_id=str(guest.id),
+                old_data={"status": old_status},
+                new_data={"status": new_status, "transaction_id": transaction_id}
+            )
+            
+            # Broadcast atomic changes to all connected iOS devices
+            try:
+                await broadcast_delta_update(changes, restaurant_id=int(restaurant_id))
+            except Exception as e:
+                logger.warning(f"Failed to broadcast atomic status update: {e}")
+            
+            logger.info(f"Atomic guest status update {transaction_id} completed successfully")
+            
+            return {
+                "success": True,
+                "transaction_id": transaction_id,
+                "guest_id": guest_id,
+                "old_status": old_status,
+                "new_status": new_status,
+                "table_cleared": old_table_id is not None and new_status in ["Finished", "Cancelled", "No Show"],
+                "changes_count": len(changes),
+                "processed_at": datetime.now(timezone.utc).isoformat()
+            }
+            
+    except Exception as e:
+        logger.error(f"Atomic guest status update {transaction_id} failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Atomic status update failed: {str(e)}"
+        )

@@ -6,6 +6,7 @@ from app.models import RestaurantTable, Restaurant, User
 from app.schemas import TableResponse, TableCreate, TableUpdate, Position
 from app.dependencies import get_current_user, verify_restaurant_access
 from app.utils.database_helper import log_activity
+from app.api.websockets import broadcast_table_updated
 
 router = APIRouter(prefix="/restaurants", tags=["tables"])
 
@@ -115,6 +116,14 @@ async def update_table(
         old_data=old_data,
         new_data=new_data
     )
+    
+    # Broadcast table update to all connected iOS devices
+    try:
+        await broadcast_table_updated(table)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to broadcast table_updated: {e}")
     
     return table_to_response(table)
 
