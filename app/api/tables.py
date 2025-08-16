@@ -13,11 +13,19 @@ router = APIRouter(prefix="/restaurants", tags=["tables"])
 
 def table_to_response(table: RestaurantTable) -> TableResponse:
     """Convert database table model to response schema"""
+    # Convert snake_case status to camelCase for iOS compatibility
+    status_mapping = {
+        'out_of_service': 'outOfService',
+        'available': 'available',
+        'occupied': 'occupied',
+        'reserved': 'reserved'
+    }
+    
     return TableResponse(
         id=str(table.id),
         tableNumber=table.table_number,
         capacity=table.capacity,
-        status=table.status,
+        status=status_mapping.get(table.status, table.status),
         position=Position(x=table.position_x, y=table.position_y),
         shape=table.shape,
         section=table.section,

@@ -38,12 +38,20 @@ def guest_to_minimal_response(guest: Guest) -> MinimalGuestResponse:
 
 def table_to_minimal_response(table: RestaurantTable) -> MinimalTableResponse:
     """Convert table to minimal response for performance"""
+    # Convert snake_case status to camelCase for iOS compatibility
+    status_mapping = {
+        'out_of_service': 'outOfService',
+        'available': 'available',
+        'occupied': 'occupied',
+        'reserved': 'reserved'
+    }
+    
     return MinimalTableResponse(
         id=str(table.id),
         tableNumber=table.table_number,
         capacity=table.capacity,  # ADDED: Required for iOS app compatibility
         position=Position(x=table.position_x, y=table.position_y),  # ADDED: Required for floor plan positioning
-        status=table.status,
+        status=status_mapping.get(table.status, table.status),
         currentGuestId=str(table.current_guest_id) if table.current_guest_id else None,
         lastUpdated=table.updated_at
     )
@@ -109,9 +117,7 @@ async def get_dashboard_data(
     
     # Build base queries with optimized loading
     guests_query = db.query(Guest)  # All guests for now (multi-tenancy temporarily disabled)
-    tables_query = db.query(RestaurantTable).options(
-        joinedload(RestaurantTable.reservations)
-    ).filter(
+    tables_query = db.query(RestaurantTable).filter(
         RestaurantTable.restaurant_id == restaurant_id,
         RestaurantTable.is_active == True
     )
@@ -272,9 +278,7 @@ async def get_dashboard_data_v1(
     
     # Build base queries with optimized loading - using restaurant_id from authenticated user
     guests_query = db.query(Guest).filter(Guest.restaurant_id == restaurant_id)  # FIXED: Multi-tenant filtering
-    tables_query = db.query(RestaurantTable).options(
-        joinedload(RestaurantTable.reservations)
-    ).filter(
+    tables_query = db.query(RestaurantTable).filter(
         RestaurantTable.restaurant_id == restaurant_id,
         RestaurantTable.is_active == True
     )
@@ -388,9 +392,7 @@ async def get_restaurant_dashboard_data(
     
     # Build base queries with optimized loading
     guests_query = db.query(Guest)  # All guests for now (multi-tenancy temporarily disabled)
-    tables_query = db.query(RestaurantTable).options(
-        joinedload(RestaurantTable.reservations)
-    ).filter(
+    tables_query = db.query(RestaurantTable).filter(
         RestaurantTable.restaurant_id == restaurant_id,
         RestaurantTable.is_active == True
     )

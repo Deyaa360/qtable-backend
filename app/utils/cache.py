@@ -71,10 +71,27 @@ def cache_key(*args, **kwargs) -> str:
     return ":".join(key_parts)
 
 def cached(timeout: int = 300, key_prefix: str = ""):
-    """Cache decorator for functions"""
+    """Cache decorator for functions (sync and async)"""
     def decorator(func):
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        async def async_wrapper(*args, **kwargs):
+            # Generate cache key
+            key = f"{key_prefix}:{func.__name__}:{cache_key(*args, **kwargs)}"
+            
+            # Try to get from cache
+            result = cache.get(key)
+            if result is not None:
+                logger.debug(f"Cache hit for key: {key}")
+                return result
+            
+            # Execute function and cache result
+            logger.debug(f"Cache miss for key: {key}")
+            result = await func(*args, **kwargs)
+            cache.set(key, result, timeout)
+            return result
+        
+        @wraps(func)
+        def sync_wrapper(*args, **kwargs):
             # Generate cache key
             key = f"{key_prefix}:{func.__name__}:{cache_key(*args, **kwargs)}"
             
@@ -90,7 +107,13 @@ def cached(timeout: int = 300, key_prefix: str = ""):
             cache.set(key, result, timeout)
             return result
         
-        return wrapper
+        # Return appropriate wrapper based on function type
+        import asyncio
+        if asyncio.iscoroutinefunction(func):
+            return async_wrapper
+        else:
+            return sync_wrapper
+        
     return decorator
 
 def invalidate_cache_pattern(pattern: str) -> int:
