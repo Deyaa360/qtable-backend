@@ -1,274 +1,174 @@
 # QTable Backend API 🚀
 
-Multi-tenant restaurant table management API server built with FastAPI, PostgreSQL, and WebSockets for real-time updates.
+Enterprise-grade restaurant table management API with real-time synchronization, atomic operations, and multi-device support.
 
 ## Features ✨
 
-- **Multi-tenant architecture** with Row Level Security
-- **Real-time updates** via WebSockets
-- **JWT authentication** with role-based access
-- **RESTful API** matching iOS app models exactly
-- **Database migrations** with Alembic
-- **Production ready** with proper error handling
+- **Real-time synchronization** - WebSocket-based live updates across all devices
+- **Atomic operations** - ACID-compliant transactions for data integrity
+- **Enterprise reliability** - Industry-standard error handling and recovery
+- **Multi-device support** - Seamless synchronization across iOS, web, and other platforms
+- **Walk-in guest management** - Complete lifecycle from check-in to seating
+- **Table management** - Real-time status updates and availability tracking
+- **Production ready** - Optimized for deployment and monitoring
 
 ## Quick Start 🏃‍♂️
 
-### 1. Environment Setup
+### 1. Installation
 
 ```bash
-# Clone and navigate to project
+# Clone repository
+git clone <repository-url>
 cd qtable-backend
 
 # Create virtual environment
 python -m venv venv
 
-# Activate virtual environment
-# Windows:
+# Activate virtual environment (Windows)
 venv\Scripts\activate
-# macOS/Linux:
-source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 ```
 
-**Note for Windows:** After activating the virtual environment, you can use either `python` or the full path `venv\Scripts\python.exe` for commands.
+### 2. Configuration
 
-### 2. Database Setup
-
-#### Option A: Railway (Recommended for Production)
-1. Sign up at [Railway.app](https://railway.app)
-2. Create new project → Add PostgreSQL
-3. Copy connection string
-4. Add to `.env` file
-
-#### Option B: Local PostgreSQL
 ```bash
-# Install PostgreSQL locally
-# Create database
-createdb qtable_db
-
-# Set environment variables
-DATABASE_URL=postgresql://postgres:password@localhost:5432/qtable_db
-```
-
-### 3. Environment Variables
-
-Create `.env` file:
-```bash
+# Copy environment template
 cp .env.example .env
+
+# Edit .env with your settings
+# DATABASE_URL=sqlite:///./qtable.db (default)
+# SECRET_KEY=your-secret-key
 ```
 
-Update `.env` with your values:
-```bash
-DATABASE_URL=postgresql://username:password@host:port/database
-SECRET_KEY=your-super-secret-key-here
-REDIS_URL=redis://localhost:6379
-ENVIRONMENT=development
-```
-
-### 4. Database Migration
+### 3. Database Setup
 
 ```bash
-# Initialize Alembic (first time only)
-alembic init alembic
-
-# Create initial migration
-alembic revision --autogenerate -m "Initial migration"
-
-# Run migrations
+# Initialize database
 alembic upgrade head
+
 ```
 
-### 5. Run the Server
+### 4. Start Server
 
 ```bash
-# Development server (Windows)
-venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Development server (macOS/Linux)
-source venv/bin/activate
+# Development
 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-# Production server (Windows)
-venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-
-# Production server (macOS/Linux)
+# Production
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Server will be available at:
-- **API:** http://localhost:8000
-- **Docs:** http://localhost:8000/docs
-- **ReDoc:** http://localhost:8000/redoc
+Server runs at: `http://localhost:8000`
 
-## API Endpoints 📡
+## API Documentation 📚
 
-### Authentication
-```http
-POST /auth/login          # Staff login
-POST /auth/register       # Restaurant signup
-GET  /auth/me            # Current user info
+- **Interactive API Docs**: `http://localhost:8000/docs`
+- **OpenAPI Schema**: `http://localhost:8000/openapi.json`
+
+## Real-time Features 🔄
+
+### WebSocket Endpoints
+
+1. **General Real-time**: `ws://localhost:8000/realtime`
+2. **Restaurant Sync**: `ws://localhost:8000/ws/restaurant/sync`
+
+### Message Format
+
+```json
+{
+  "type": "guest_updated|table_updated|reservation_updated",
+  "data": { /* entity data */ },
+  "timestamp": "2024-01-01T00:00:00Z",
+  "restaurant_id": 1
+}
 ```
 
-### Tables (Floor Plan)
-```http
-GET    /restaurants/{id}/tables           # Get all tables
-PUT    /restaurants/{id}/tables/{table_id} # Update table
-POST   /restaurants/{id}/tables           # Create table
-DELETE /restaurants/{id}/tables/{table_id} # Delete table
-```
+### Heartbeat
+
+- **Ping interval**: 30 seconds
+- **Connection timeout**: 5 minutes
+- **Auto-reconnect**: Client responsibility
+
+## Core Endpoints 🛠️
+
+### Guest Management
+- `POST /api/guests/` - Create walk-in guest
+- `GET /api/guests/` - List all guests
+- `PUT /api/guests/{id}/status/atomic` - Update status atomically
+- `DELETE /api/guests/{id}` - Remove guest
+
+### Table Management  
+- `GET /api/tables/` - List all tables
+- `PUT /api/tables/{id}` - Update table status
+- `POST /api/tables/` - Create new table
 
 ### Reservations
-```http
-GET    /restaurants/{id}/reservations      # List reservations
-POST   /restaurants/{id}/reservations      # Create reservation
-PUT    /restaurants/{id}/reservations/{id} # Update reservation
-DELETE /restaurants/{id}/reservations/{id} # Cancel reservation
-```
+- `GET /api/reservations/` - List reservations
+- `POST /api/reservations/` - Create reservation
+- `PUT /api/reservations/{id}` - Update reservation
 
-### WebSocket
-```http
-WS /restaurants/{id}/live    # Real-time updates
-```
+### Atomic Operations
+- `POST /api/atomic/batch` - Execute atomic batch operations
 
-## Example Usage 💡
+### Sync API
+- `GET /api/sync/full` - Full data sync
+- `GET /api/sync/delta` - Delta sync since timestamp
+- `POST /api/sync/batch` - Batch data updates
 
-### 1. Register Restaurant
+## Production Deployment 🚀
+
+### Environment Variables
+
 ```bash
-curl -X POST "http://localhost:8000/auth/register" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "restaurant_name": "Pizza Palace",
-    "email": "owner@pizzapalace.com",
-    "password": "password123",
-    "first_name": "John",
-    "last_name": "Doe"
-  }'
+DATABASE_URL=sqlite:///./qtable.db
+SECRET_KEY=your-production-secret-key
+ENVIRONMENT=production
+WS_HEARTBEAT_INTERVAL=30
+WS_CONNECTION_TIMEOUT=300
+LOG_LEVEL=INFO
 ```
 
-### 2. Login
-```bash
-curl -X POST "http://localhost:8000/auth/login" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "owner@pizzapalace.com",
-    "password": "password123"
-  }'
-```
+### Security Checklist
 
-### 3. Get Tables (with JWT token)
-```bash
-curl -X GET "http://localhost:8000/restaurants/{restaurant_id}/tables" \
-  -H "Authorization: Bearer {your_jwt_token}"
-```
+- [ ] Change default SECRET_KEY
+- [ ] Use HTTPS in production
+- [ ] Configure CORS properly
+- [ ] Set up monitoring
+- [ ] Enable logging
+- [ ] Regular database backups
 
-### 4. Update Table Status
-```bash
-curl -X PUT "http://localhost:8000/restaurants/{restaurant_id}/tables/{table_id}" \
-  -H "Authorization: Bearer {your_jwt_token}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "status": "occupied",
-    "currentGuestId": "reservation_uuid"
-  }'
-```
+## Architecture 🏗️
 
-## Data Models 📊
+### Database Schema
+- **Guests**: Walk-in guest management
+- **Tables**: Restaurant table inventory
+- **Reservations**: Reservation system
+- **Activity Log**: Audit trail
 
-The API exactly matches the iOS app models:
+### Real-time Sync
+- WebSocket connections for live updates
+- Atomic operations ensure data consistency
+- Automatic broadcasting to all connected clients
+- iOS-compatible message format
 
-### Table Response
-```json
-{
-  "id": "uuid",
-  "tableNumber": "A1",
-  "capacity": 4,
-  "status": "available",
-  "position": {"x": 0.2, "y": 0.3},
-  "shape": "round",
-  "section": "Main Dining",
-  "currentGuestId": null,
-  "lastUpdated": "2025-08-13T10:30:00Z",
-  "createdAt": "2025-08-01T09:00:00Z"
-}
-```
+### Error Handling
+- Comprehensive exception handling
+- Automatic rollback on failures
+- Detailed error logging
+- Graceful degradation
+## Support �
 
-### Reservation Response
-```json
-{
-  "id": "uuid",
-  "guestName": "John Smith",
-  "partySize": 4,
-  "status": "seated",
-  "reservationTime": "2025-08-13T19:00:00Z",
-  "checkInTime": "2025-08-13T18:55:00Z",
-  "seatedTime": "2025-08-13T19:05:00Z",
-  "assignedTableId": "table_uuid",
-  "contactInfo": "+1234567890",
-  "notes": "Birthday celebration",
-  "createdAt": "2025-08-13T18:55:00Z",
-  "lastUpdated": "2025-08-13T19:05:00Z"
-}
-```
+For questions or issues:
+- Check the API documentation at `/docs`
+- Review error logs for debugging
+- Ensure all environment variables are configured
+- Verify database connectivity
 
-## WebSocket Events 📡
+## License �
 
-### Table Update
-```json
-{
-  "type": "table_update",
-  "data": {TableResponse},
-  "timestamp": "2025-08-13T19:05:00Z",
-  "restaurant_id": "uuid"
-}
-```
-
-### Reservation Update
-```json
-{
-  "type": "reservation_update",
-  "data": {ReservationResponse},
-  "timestamp": "2025-08-13T19:05:00Z",
-  "restaurant_id": "uuid"
-}
-```
-
-## Development 🛠
-
-### Project Structure
-```
-qtable-backend/
-├── app/
-│   ├── api/           # API routes
-│   ├── models/        # SQLAlchemy models
-│   ├── schemas/       # Pydantic schemas
-│   ├── services/      # Business logic
-│   ├── utils/         # Utilities
-│   ├── main.py        # FastAPI app
-│   ├── config.py      # Settings
-│   └── database.py    # DB connection
-├── alembic/           # DB migrations
-├── requirements.txt
-└── .env              # Environment variables
-```
-
-### Adding New Features
-
-1. **Add Model:** Create SQLAlchemy model in `app/models/`
-2. **Add Schema:** Create Pydantic schema in `app/schemas/`
-3. **Add API:** Create router in `app/api/`
-4. **Add Migration:** `alembic revision --autogenerate -m "description"`
-5. **Run Migration:** `alembic upgrade head`
-
-### Testing
-```bash
-# Install test dependencies
-pip install pytest pytest-asyncio httpx
-
-# Run tests
-pytest
-```
+This project is proprietary software. All rights reserved.
 
 ## Production Deployment 🚀
 
