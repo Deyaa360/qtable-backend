@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query, Path
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import func, and_
 from typing import Optional
 from datetime import datetime
@@ -12,6 +12,7 @@ from app.schemas.dashboard import (
 from app.schemas.guest import GuestResponse
 from app.schemas.table import TableResponse, Position
 from app.dependencies import get_current_user, verify_restaurant_access
+from app.utils.cache import cached, invalidate_cache_pattern
 import logging
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
@@ -91,6 +92,7 @@ def table_to_full_response(table: RestaurantTable) -> TableResponse:
     )
 
 @router.get("/{restaurant_id}/dashboard-data", response_model=DashboardDataResponse)
+@cached(timeout=30, key_prefix="dashboard")  # Cache for 30 seconds
 async def get_dashboard_data(
     restaurant_id: str = Path(..., description="Restaurant ID"),
     since: Optional[datetime] = Query(None, description="ISO8601 timestamp for delta updates"),
@@ -105,9 +107,11 @@ async def get_dashboard_data(
     """
     logger.info(f"Dashboard data request - since: {since}, minimal: {minimal}")
     
-    # Build base queries
+    # Build base queries with optimized loading
     guests_query = db.query(Guest)  # All guests for now (multi-tenancy temporarily disabled)
-    tables_query = db.query(RestaurantTable).filter(
+    tables_query = db.query(RestaurantTable).options(
+        joinedload(RestaurantTable.reservations)
+    ).filter(
         RestaurantTable.restaurant_id == restaurant_id,
         RestaurantTable.is_active == True
     )
@@ -251,6 +255,7 @@ async def get_delta_updates(
 # These endpoints match the iOS app expectations
 
 @router.get("/data", response_model=DashboardDataResponse)
+@cached(timeout=30, key_prefix="dashboard_v1")  # Cache for 30 seconds
 async def get_dashboard_data_v1(
     since: Optional[datetime] = Query(None, description="ISO8601 timestamp for delta updates"),
     minimal: bool = Query(True, description="Return minimal data for performance"),
@@ -265,9 +270,11 @@ async def get_dashboard_data_v1(
     
     restaurant_id = current_user.restaurant_id
     
-    # Build base queries - using restaurant_id from authenticated user
+    # Build base queries with optimized loading - using restaurant_id from authenticated user
     guests_query = db.query(Guest).filter(Guest.restaurant_id == restaurant_id)  # FIXED: Multi-tenant filtering
-    tables_query = db.query(RestaurantTable).filter(
+    tables_query = db.query(RestaurantTable).options(
+        joinedload(RestaurantTable.reservations)
+    ).filter(
         RestaurantTable.restaurant_id == restaurant_id,
         RestaurantTable.is_active == True
     )
@@ -351,6 +358,7 @@ async def get_dashboard_data_v1(
 # Keep these for backward compatibility
 
 @restaurant_router.get("/{restaurant_id}/dashboard-data", response_model=DashboardDataResponse)
+@cached(timeout=30, key_prefix="restaurant_dashboard")  # Cache for 30 seconds
 async def get_dashboard_data_restaurant(
     restaurant_id: str = Path(..., description="Restaurant ID"),
     since: Optional[datetime] = Query(None, description="ISO8601 timestamp for delta updates"),
@@ -378,9 +386,11 @@ async def get_restaurant_dashboard_data(
     """Implementation for restaurant-specific dashboard data"""
     logger.info(f"Restaurant dashboard data request - restaurant: {restaurant_id}, since: {since}, minimal: {minimal}")
     
-    # Build base queries
+    # Build base queries with optimized loading
     guests_query = db.query(Guest)  # All guests for now (multi-tenancy temporarily disabled)
-    tables_query = db.query(RestaurantTable).filter(
+    tables_query = db.query(RestaurantTable).options(
+        joinedload(RestaurantTable.reservations)
+    ).filter(
         RestaurantTable.restaurant_id == restaurant_id,
         RestaurantTable.is_active == True
     )

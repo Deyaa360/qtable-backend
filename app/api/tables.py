@@ -6,7 +6,8 @@ from app.models import RestaurantTable, Restaurant, User
 from app.schemas import TableResponse, TableCreate, TableUpdate, Position
 from app.dependencies import get_current_user, verify_restaurant_access
 from app.utils.database_helper import log_activity
-from app.api.websockets import broadcast_table_updated
+from app.utils.realtime_broadcaster import realtime_broadcaster
+from app.api.websockets import broadcast_table_updated, broadcast_table_data_change
 
 router = APIRouter(prefix="/restaurants", tags=["tables"])
 
@@ -117,13 +118,31 @@ async def update_table(
         new_data=new_data
     )
     
-    # Broadcast table update to all connected iOS devices
+    # 🚀 REAL-TIME BROADCAST: PRIORITY #3 - Table status updates
+    try:
+        await realtime_broadcaster.broadcast_table_updated(
+            restaurant_id=restaurant_id,
+            table_id=str(table.id),
+            table_data={
+                "status": table.status,
+                "guest_id": str(table.current_guest_id) if table.current_guest_id else None
+            }
+        )
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"📡 Real-time broadcast sent for table update: {table.id}")
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to broadcast real-time table_updated: {e}")
+    
+    # Legacy broadcast for backward compatibility
     try:
         await broadcast_table_updated(table)
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
-        logger.warning(f"Failed to broadcast table_updated: {e}")
+        logger.warning(f"Failed to broadcast legacy table_updated: {e}")
     
     return table_to_response(table)
 

@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     # Environment
     environment: str = os.getenv("ENVIRONMENT", "development")
     
+    # WebSocket Configuration
+    ws_heartbeat_interval: int = int(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
+    ws_connection_timeout: int = int(os.getenv("WS_CONNECTION_TIMEOUT", "300"))
+    
+    # Logging
+    log_level: str = os.getenv("LOG_LEVEL", "INFO")
+    
     # CORS
     cors_origins: list = ["*"]  # In production, specify exact origins
     

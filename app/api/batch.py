@@ -8,6 +8,7 @@ from app.schemas.batch import BatchUpdateRequest, BatchUpdateResponse, BatchGues
 from app.schemas.table import Position
 from app.dependencies import get_current_user, verify_restaurant_access
 from app.utils.database_helper import log_activity
+from app.utils.realtime_broadcaster import realtime_broadcaster
 import logging
 
 router = APIRouter(prefix="/restaurants", tags=["batch-operations"])
@@ -209,6 +210,22 @@ async def batch_update(
         
         # Commit all changes atomically
         db.commit()
+        
+        # 🚀 REAL-TIME BROADCAST: PRIORITY #4 - Atomic transaction complete
+        try:
+            affected_entities = []
+            for guest in updated_guests:
+                affected_entities.append(f"guest-{guest.id}")
+            for table in updated_tables:
+                affected_entities.append(f"table-{table.id}")
+            
+            await realtime_broadcaster.broadcast_atomic_transaction_complete(
+                restaurant_id=restaurant_id,
+                affected_entities=affected_entities
+            )
+            logger.info(f"📡 Real-time broadcast sent for atomic transaction: {len(affected_entities)} entities")
+        except Exception as e:
+            logger.warning(f"Failed to broadcast atomic_transaction_complete: {e}")
         
         # Log the batch operation
         log_activity(

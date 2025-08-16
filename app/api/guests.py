@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Path
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 from typing import List, Optional
 from datetime import datetime
 from app.database import get_db
@@ -7,7 +7,18 @@ from app.models import Guest, Reservation, Restaurant, User, RestaurantTable
 from app.schemas import GuestResponse, GuestCreate, GuestUpdate
 from app.dependencies import get_current_user, verify_restaurant_access
 from app.utils.database_helper import log_activity
+from app.utils.cache import cached, invalidate_cache_pattern
+from app.utils.realtime_broadcaster import realtime_broadcaster
 from app.api.websockets import broadcast_guest_created, broadcast_guest_updated, broadcast_guest_deleted, broadcast_table_updated, broadcast_delta_update
+import logging
+from datetime import datetime
+from app.database import get_db
+from app.models import Guest, Reservation, Restaurant, User, RestaurantTable
+from app.schemas import GuestResponse, GuestCreate, GuestUpdate
+from app.dependencies import get_current_user, verify_restaurant_access
+from app.utils.database_helper import log_activity
+from app.utils.cache import cached, invalidate_cache_pattern
+from app.api.websockets import broadcast_guest_created, broadcast_guest_updated, broadcast_guest_deleted, broadcast_table_updated, broadcast_delta_update, broadcast_guest_data_change
 import logging
 
 router = APIRouter(prefix="/restaurants", tags=["guests"])
@@ -218,6 +229,10 @@ async def create_guest(
         db.commit()
         db.refresh(guest)
         
+        # Invalidate relevant cache entries
+        invalidate_cache_pattern(f"dashboard:{restaurant_id}")
+        invalidate_cache_pattern(f"guests:{restaurant_id}")
+        
         # Log activity with appropriate action type
         action_type = "walk_in_create" if guest.status == "Waitlist" else "guest_create"
         log_activity(
@@ -237,11 +252,27 @@ async def create_guest(
         
         logger.info(f"Successfully created guest: {guest.first_name} {guest.last_name} (ID: {guest.id}, Status: {guest.status})")
         
-        # Broadcast guest creation to all connected iOS devices
+        # 🚀 REAL-TIME BROADCAST: Notify all connected devices immediately
+        try:
+            await realtime_broadcaster.broadcast_guest_created(
+                restaurant_id=restaurant_id,
+                guest_id=str(guest.id),
+                guest_data={
+                    "first_name": guest.first_name,
+                    "last_name": guest.last_name,
+                    "party_size": guest.party_size,
+                    "status": guest.status
+                }
+            )
+            logger.info(f"📡 Real-time broadcast sent for new guest: {guest.id}")
+        except Exception as e:
+            logger.warning(f"Failed to broadcast real-time guest_created: {e}")
+        
+        # Legacy broadcast for backward compatibility
         try:
             await broadcast_guest_created(guest)
         except Exception as e:
-            logger.warning(f"Failed to broadcast guest_created: {e}")
+            logger.warning(f"Failed to broadcast legacy guest_created: {e}")
         
         return guest_to_response(guest)
         
@@ -365,11 +396,29 @@ async def update_guest(
         new_data=new_data
     )
     
-    # Broadcast guest update to all connected iOS devices
+    # 🚀 REAL-TIME BROADCAST: PRIORITY #1 - Guest status updates
+    try:
+        # Determine the action type for better messaging
+        action = "status_change" if guest_data.status is not None else "update"
+        
+        await realtime_broadcaster.broadcast_guest_updated(
+            restaurant_id=restaurant_id,
+            guest_id=str(guest.id),
+            action=action,
+            guest_data={
+                "status": guest.status,
+                "table_id": str(guest.table_id) if guest.table_id else None
+            }
+        )
+        logger.info(f"📡 Real-time broadcast sent for guest update: {guest.id}")
+    except Exception as e:
+        logger.warning(f"Failed to broadcast real-time guest_updated: {e}")
+    
+    # Legacy broadcast for backward compatibility
     try:
         await broadcast_guest_updated(guest)
     except Exception as e:
-        logger.warning(f"Failed to broadcast guest_updated: {e}")
+        logger.warning(f"Failed to broadcast legacy guest_updated: {e}")
     
     return guest_to_response(guest)
 
@@ -425,7 +474,17 @@ async def delete_guest(
         }
     )
     
-    # Broadcast guest deletion to all connected iOS devices
+    # 🚀 REAL-TIME BROADCAST: Guest deletion
+    try:
+        await realtime_broadcaster.broadcast_guest_deleted(
+            restaurant_id=restaurant_id,
+            guest_id=guest_id_for_broadcast
+        )
+        logger.info(f"📡 Real-time broadcast sent for guest deletion: {guest_id_for_broadcast}")
+    except Exception as e:
+        logger.warning(f"Failed to broadcast real-time guest_deleted: {e}")
+    
+    # Legacy broadcast for backward compatibility
     try:
         await broadcast_guest_deleted(guest_id_for_broadcast)
     except Exception as e:

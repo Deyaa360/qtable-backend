@@ -5,6 +5,8 @@ import asyncio
 from datetime import datetime, timezone
 from app.dependencies import verify_token
 from app.models import Guest, RestaurantTable
+from app.utils.websocket_manager import connection_manager, optimized_guest_broadcast, optimized_table_broadcast
+from app.utils.realtime_broadcaster import realtime_broadcaster
 import logging
 
 router = APIRouter(tags=["websockets"])
@@ -55,6 +57,91 @@ class RealtimeConnectionManager:
 
 # Global connection manager
 realtime_manager = RealtimeConnectionManager()
+
+# ===== REAL-TIME DATA CHANGE BROADCASTING =====
+# This is the missing piece that iOS developer requested
+
+async def broadcast_data_change(restaurant_id: str, message: dict):
+    """
+    🚀 CRITICAL FUNCTION FOR REAL-TIME UPDATES
+    
+    Broadcasts data changes to all connected WebSocket clients immediately
+    when API endpoints modify restaurant data.
+    
+    This enables Device A → update data → Device B sees change in ~200ms
+    
+    Args:
+        restaurant_id: The restaurant where data changed
+        message: The notification message with type, data, timestamp
+    """
+    try:
+        # Add debug logging as requested by iOS developer
+        logger.info(f"📡 Broadcasting {message['type']} to all connected clients")
+        logger.info(f"🎯 Message: {json.dumps(message)}")
+        
+        # Broadcast to all connected devices (iOS requirement)
+        await realtime_manager.broadcast_to_all(message)
+        
+        logger.info(f"✅ Real-time broadcast completed for {message['type']}")
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to broadcast data change: {e}")
+        # Don't fail the API call if WebSocket broadcast fails
+        pass
+
+# Convenience functions for specific data types (matching iOS requirements)
+
+async def broadcast_guest_data_change(restaurant_id: str, guest: Guest, action: str = "update"):
+    """Broadcast guest data changes - PRIORITY #1 per iOS developer"""
+    message = {
+        "type": "guest_updated" if action == "update" else "guest_created",
+        "restaurant_id": restaurant_id,
+        "guest_id": str(guest.id),
+        "action": action,
+        "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+        "data": {
+            "id": str(guest.id),
+            "guestName": f"{guest.first_name} {guest.last_name}",
+            "firstName": guest.first_name,
+            "lastName": guest.last_name,
+            "partySize": guest.party_size,
+            "status": guest.status,
+            "table_id": str(guest.table_id) if guest.table_id else None,
+            "email": guest.email,
+            "phone": guest.phone
+        }
+    }
+    
+    await broadcast_data_change(restaurant_id, message)
+
+async def broadcast_table_data_change(restaurant_id: str, table: RestaurantTable, action: str = "update"):
+    """Broadcast table data changes - PRIORITY #3 per iOS developer"""
+    message = {
+        "type": "table_updated",
+        "restaurant_id": restaurant_id,
+        "table_id": str(table.id),
+        "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+        "data": {
+            "id": str(table.id),
+            "tableNumber": table.table_number,
+            "capacity": table.capacity,
+            "status": table.status,
+            "guest_id": str(table.current_guest_id) if hasattr(table, 'current_guest_id') and table.current_guest_id else None
+        }
+    }
+    
+    await broadcast_data_change(restaurant_id, message)
+
+async def broadcast_atomic_transaction_complete(restaurant_id: str, affected_entities: List[str]):
+    """Broadcast atomic transaction completion - PRIORITY #4 per iOS developer"""
+    message = {
+        "type": "atomic_transaction_complete",
+        "restaurant_id": restaurant_id,
+        "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+        "affected_entities": affected_entities
+    }
+    
+    await broadcast_data_change(restaurant_id, message)
 
 def guest_to_ios_format(guest: Guest) -> dict:
     """Convert backend Guest model to iOS GuestEntry format"""
@@ -116,14 +203,23 @@ def table_to_ios_format(table: RestaurantTable) -> dict:
     }
 
 @router.websocket("/realtime")
-async def realtime_websocket_endpoint(websocket: WebSocket):
+async def realtime_websocket_endpoint(websocket: WebSocket, restaurant_id: str = "test-restaurant-1"):
     """
     WebSocket endpoint for real-time updates matching iOS specifications
-    URL: ws://your-domain.com/realtime
+    URL: ws://your-domain.com/realtime?restaurant_id=test-restaurant-1
     """
     try:
-        await realtime_manager.connect(websocket)
-        logger.info("iOS client connected to realtime WebSocket")
+        # Use the new realtime broadcaster that supports restaurant-specific connections
+        await realtime_broadcaster.connect(websocket, restaurant_id)
+        logger.info(f"iOS client connected to realtime WebSocket for restaurant: {restaurant_id}")
+        
+        # Send initial connection confirmation
+        await websocket.send_text(json.dumps({
+            "type": "restaurant_connect",
+            "restaurant_id": restaurant_id,
+            "platform": "iOS",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+        }))
         
         # Keep connection alive and handle incoming messages
         while True:
@@ -137,13 +233,10 @@ async def realtime_websocket_endpoint(websocket: WebSocket):
                     
                     # Handle ping from iOS app (required every 30 seconds)
                     if message_type == "ping":
-                        await realtime_manager.send_personal_message(
-                            json.dumps({
-                                "type": "pong",
-                                "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-                            }),
-                            websocket
-                        )
+                        await websocket.send_text(json.dumps({
+                            "type": "pong",
+                            "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+                        }))
                         logger.debug("Responded to ping with pong")
                     
                 except json.JSONDecodeError:
@@ -151,21 +244,18 @@ async def realtime_websocket_endpoint(websocket: WebSocket):
                     
             except asyncio.TimeoutError:
                 # No message received in 35 seconds, send heartbeat
-                await realtime_manager.send_personal_message(
-                    json.dumps({
-                        "type": "heartbeat", 
-                        "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-                    }),
-                    websocket
-                )
+                await websocket.send_text(json.dumps({
+                    "type": "heartbeat", 
+                    "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+                }))
                 logger.debug("Sent heartbeat to keep connection alive")
                 
     except WebSocketDisconnect:
-        realtime_manager.disconnect(websocket)
-        logger.info("iOS client disconnected from realtime WebSocket")
+        realtime_broadcaster.disconnect(websocket, restaurant_id)
+        logger.info(f"iOS client disconnected from realtime WebSocket for restaurant: {restaurant_id}")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
-        realtime_manager.disconnect(websocket)
+        realtime_broadcaster.disconnect(websocket, restaurant_id)
 
 @router.websocket("/ws/restaurant/sync")
 async def restaurant_sync_websocket_endpoint(websocket: WebSocket, restaurant_id: int = 1):
@@ -290,28 +380,42 @@ async def send_full_sync(websocket: WebSocket, restaurant_id: int):
 # iOS-compatible broadcast functions matching their exact message format
 
 async def broadcast_guest_created(guest: Guest):
-    """Broadcast guest_created event to all connected iOS clients"""
-    message = {
-        "type": "guest_created",
-        "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
-        "guest": guest_to_ios_format(guest),
-        "table": None,
-        "guestId": None
-    }
-    await realtime_manager.broadcast_to_all(message)
-    logger.info(f"Broadcasted guest_created for guest {guest.id}")
+    """Broadcast guest_created event to all connected iOS clients with optimization"""
+    try:
+        # Use optimized broadcast function
+        await optimized_guest_broadcast(guest, "guest_created")
+        
+        # Legacy iOS-compatible message format for backward compatibility
+        message = {
+            "type": "guest_created",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+            "guest": guest_to_ios_format(guest),
+            "table": None,
+            "guestId": None
+        }
+        await realtime_manager.broadcast_to_all(message)
+        logger.info(f"Broadcasted guest_created for guest {guest.id}")
+    except Exception as e:
+        logger.error(f"Error broadcasting guest_created: {e}")
 
 async def broadcast_guest_updated(guest: Guest):
-    """Broadcast guest_updated event to all connected iOS clients"""
-    message = {
-        "type": "guest_updated", 
-        "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
-        "guest": guest_to_ios_format(guest),
-        "table": None,
-        "guestId": None
-    }
-    await realtime_manager.broadcast_to_all(message)
-    logger.info(f"Broadcasted guest_updated for guest {guest.id}")
+    """Broadcast guest_updated event to all connected iOS clients with optimization"""
+    try:
+        # Use optimized broadcast function
+        await optimized_guest_broadcast(guest, "guest_updated")
+        
+        # Legacy iOS-compatible message format for backward compatibility
+        message = {
+            "type": "guest_updated", 
+            "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+            "guest": guest_to_ios_format(guest),
+            "table": None,
+            "guestId": None
+        }
+        await realtime_manager.broadcast_to_all(message)
+        logger.info(f"Broadcasted guest_updated for guest {guest.id}")
+    except Exception as e:
+        logger.error(f"Error broadcasting guest_updated: {e}")
 
 async def broadcast_guest_deleted(guest_id: str):
     """Broadcast guest_deleted event to all connected iOS clients"""
@@ -326,16 +430,23 @@ async def broadcast_guest_deleted(guest_id: str):
     logger.info(f"Broadcasted guest_deleted for guest {guest_id}")
 
 async def broadcast_table_updated(table: RestaurantTable):
-    """Broadcast table_updated event to all connected iOS clients"""
-    message = {
-        "type": "table_updated",
-        "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
-        "guest": None,
-        "table": table_to_ios_format(table),
-        "guestId": None
-    }
-    await realtime_manager.broadcast_to_all(message)
-    logger.info(f"Broadcasted table_updated for table {table.id}")
+    """Broadcast table_updated event to all connected iOS clients with optimization"""
+    try:
+        # Use optimized broadcast function
+        await optimized_table_broadcast(table, "table_updated")
+        
+        # Legacy iOS-compatible message format for backward compatibility
+        message = {
+            "type": "table_updated",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+            "guest": None,
+            "table": table_to_ios_format(table),
+            "guestId": None
+        }
+        await realtime_manager.broadcast_to_all(message)
+        logger.info(f"Broadcasted table_updated for table {table.id}")
+    except Exception as e:
+        logger.error(f"Error broadcasting table_updated: {e}")
 
 async def broadcast_delta_update(changes: List[dict], restaurant_id: int = 1):
     """
