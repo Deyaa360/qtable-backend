@@ -34,4 +34,3 @@ class Restaurant(Base):
     tables = relationship("RestaurantTable", back_populates="restaurant", cascade="all, delete-orphan")
     reservations = relationship("Reservation", back_populates="restaurant", cascade="all, delete-orphan")
     guests = relationship("Guest", back_populates="restaurant", cascade="all, delete-orphan")
-    activity_logs = relationship("ActivityLog", back_populates="restaurant", cascade="all, delete-orphan")

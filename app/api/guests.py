@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Path
 from sqlalchemy.orm import Session, joinedload, selectinload
 from typing import List, Optional
 from datetime import datetime
+import logging
 from app.database import get_db
 from app.models import Guest, Reservation, Restaurant, User, RestaurantTable
 from app.schemas import GuestResponse, GuestCreate, GuestUpdate
@@ -9,17 +10,7 @@ from app.dependencies import get_current_user, verify_restaurant_access
 from app.utils.database_helper import log_activity
 from app.utils.cache import cached, invalidate_cache_pattern
 from app.utils.realtime_broadcaster import realtime_broadcaster
-from app.api.websockets import broadcast_guest_created, broadcast_guest_updated, broadcast_guest_deleted, broadcast_table_updated, broadcast_delta_update
-import logging
-from datetime import datetime
-from app.database import get_db
-from app.models import Guest, Reservation, Restaurant, User, RestaurantTable
-from app.schemas import GuestResponse, GuestCreate, GuestUpdate
-from app.dependencies import get_current_user, verify_restaurant_access
-from app.utils.database_helper import log_activity
-from app.utils.cache import cached, invalidate_cache_pattern
 from app.api.websockets import broadcast_guest_created, broadcast_guest_updated, broadcast_guest_deleted, broadcast_table_updated, broadcast_delta_update, broadcast_guest_data_change
-import logging
 
 router = APIRouter(prefix="/restaurants", tags=["guests"])
 logger = logging.getLogger(__name__)

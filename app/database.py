@@ -9,7 +9,7 @@ if "sqlite" in settings.database_url:
     engine = create_engine(
         settings.database_url,
         connect_args={"check_same_thread": False},
-        echo=settings.environment == "development",
+        echo=False,  # Disable SQL logging
         # SQLite optimization
         poolclass=StaticPool,
         pool_pre_ping=True,
@@ -25,7 +25,7 @@ else:
         max_overflow=30,
         pool_pre_ping=True,
         pool_recycle=300,
-        echo=settings.environment == "development"
+        echo=False  # Disable SQL logging
     )
 
 # Create session factory with optimized settings
