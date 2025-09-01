@@ -76,6 +76,19 @@ async def startup_event():
     logger.info(f"📊 Environment: {settings.environment}")
     logger.info(f"🗄️  Database: {settings.database_url[:50]}...")
     
+    # Create database tables first
+    try:
+        from app.database import engine
+        from app.models import Base
+        
+        logger.info("🗄️  Creating database tables...")
+        Base.metadata.create_all(bind=engine)
+        logger.info("✅ Database tables created successfully")
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to create database tables: {str(e)}")
+        # Don't stop the server, but log the error
+    
     # Create admin user and restaurant if they don't exist
     try:
         from app.database import get_db
