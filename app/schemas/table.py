@@ -16,10 +16,10 @@ class TableShape(str, Enum):
     rectangle = "rectangle"
     oval = "oval"
 
-# Position schema (matches iOS CGPoint)
+# Position schema (matches iOS CGPoint) - now expects normalized coordinates
 class Position(BaseModel):
-    x: float
-    y: float
+    x: float  # 0.0-1.0 normalized coordinate
+    y: float  # 0.0-1.0 normalized coordinate
 
 # Base table schema
 class TableBase(BaseModel):

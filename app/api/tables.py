@@ -14,6 +14,27 @@ from app.api.websockets import broadcast_table_updated, broadcast_table_data_cha
 router = APIRouter(prefix="/restaurants", tags=["tables"])
 logger = logging.getLogger(__name__)
 
+# Canvas size constants for coordinate conversion
+CANVAS_WIDTH = 800.0
+CANVAS_HEIGHT = 600.0
+
+def normalize_position(position: Position) -> Position:
+    """Convert pixel coordinates to normalized (0.0-1.0) coordinates if needed"""
+    x = position.x
+    y = position.y
+    
+    # If coordinates are > 1.0, assume they're pixel coordinates and convert
+    if x > 1.0:
+        x = x / CANVAS_WIDTH
+    if y > 1.0:
+        y = y / CANVAS_HEIGHT
+    
+    # Ensure coordinates are within bounds
+    x = max(0.0, min(1.0, x))
+    y = max(0.0, min(1.0, y))
+    
+    return Position(x=x, y=y)
+
 def table_to_response(table: RestaurantTable) -> TableResponse:
     """Convert database table model to response schema"""
     # Convert snake_case status to camelCase for iOS compatibility
@@ -91,8 +112,9 @@ async def update_table(
     if table_data.status is not None:
         table.status = table_data.status
     if table_data.position is not None:
-        table.position_x = table_data.position.x
-        table.position_y = table_data.position.y
+        normalized_position = normalize_position(table_data.position)
+        table.position_x = normalized_position.x
+        table.position_y = normalized_position.y
     if table_data.shape is not None:
         table.shape = table_data.shape
     if table_data.section is not None:
@@ -207,13 +229,16 @@ async def create_table(
             detail=f"Table {table_data.table_number} already exists"
         )
     
+    # Normalize position coordinates
+    normalized_position = normalize_position(table_data.position)
+    
     # Create new table
     table = RestaurantTable(
         restaurant_id=restaurant_id,
         table_number=table_data.table_number,
         capacity=table_data.capacity,
-        position_x=table_data.position.x,
-        position_y=table_data.position.y,
+        position_x=normalized_position.x,
+        position_y=normalized_position.y,
         shape=table_data.shape,
         section=table_data.section
     )
