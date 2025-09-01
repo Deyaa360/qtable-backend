@@ -10,7 +10,7 @@ from app.dependencies import get_current_user, verify_restaurant_access
 from app.utils.database_helper import log_activity
 from app.utils.cache import cached, invalidate_cache_pattern
 from app.utils.realtime_broadcaster import realtime_broadcaster
-from app.api.websockets import broadcast_guest_created, broadcast_guest_updated, broadcast_guest_deleted, broadcast_table_updated, broadcast_delta_update, broadcast_guest_data_change
+from app.api.websockets import broadcast_guest_created, broadcast_guest_updated, broadcast_guest_deleted, broadcast_table_updated, broadcast_guest_data_change
 
 router = APIRouter(prefix="/restaurants", tags=["guests"])
 logger = logging.getLogger(__name__)
@@ -289,12 +289,6 @@ async def create_guest(
         except Exception as e:
             logger.warning(f"Failed to broadcast real-time guest_created: {e}")
         
-        # Legacy broadcast for backward compatibility
-        try:
-            await broadcast_guest_created(guest)
-        except Exception as e:
-            logger.warning(f"Failed to broadcast legacy guest_created: {e}")
-        
         return guest_to_response(guest)
         
     except Exception as e:
@@ -449,12 +443,6 @@ async def update_guest(
         logger.info(f"📡 Real-time guest_updated broadcast sent for guest {guest.id} with action: {action}")
     except Exception as e:
         logger.warning(f"Failed to broadcast real-time guest_updated: {e}")
-    
-    # Legacy broadcast for backward compatibility
-    try:
-        await broadcast_guest_updated(guest)
-    except Exception as e:
-        logger.warning(f"Failed to broadcast legacy guest_updated: {e}")
     
     return guest_to_response(guest)
 
@@ -655,12 +643,6 @@ async def update_guest_status_atomic(
                 logger.info(f"📡 Real-time guest_updated broadcast sent for atomic guest {guest.id}")
             except Exception as e:
                 logger.warning(f"Failed to broadcast guest_updated: {e}")
-            
-            # Legacy broadcast for compatibility
-            try:
-                await broadcast_delta_update(changes, restaurant_id=int(restaurant_id))
-            except Exception as e:
-                logger.warning(f"Failed to broadcast atomic status update: {e}")
             
             logger.info(f"Atomic guest status update {transaction_id} completed successfully")
             

@@ -77,11 +77,11 @@ async def broadcast_data_change(restaurant_id: str, message: dict):
     """
     try:
         # Add debug logging as requested by iOS developer
-        logger.info(f"📡 Broadcasting {message['type']} to all connected clients")
+        logger.info(f"📡 Broadcasting {message['type']} to restaurant {restaurant_id}")
         logger.info(f"🎯 Message: {json.dumps(message)}")
         
-        # Broadcast to all connected devices (iOS requirement)
-        await realtime_manager.broadcast_to_all(message)
+        # 🚨 CRITICAL FIX: Use realtime_broadcaster for restaurant-specific connections
+        await realtime_broadcaster.broadcast_data_change(restaurant_id, message)
         
         logger.info(f"✅ Real-time broadcast completed for {message['type']}")
         
@@ -484,10 +484,12 @@ async def broadcast_delta_update(changes: List[dict], restaurant_id: int = 1):
     message = {
         "type": "delta_update",
         "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
-        "restaurant_id": restaurant_id,
+        "restaurant_id": str(restaurant_id),
         "changes": changes
     }
-    await realtime_manager.broadcast_to_all(message)
+    
+    # 🚨 CRITICAL FIX: Use realtime_broadcaster instead of realtime_manager
+    await realtime_broadcaster.broadcast_data_change(str(restaurant_id), message)
     logger.info(f"Broadcasted delta_update with {len(changes)} changes for restaurant {restaurant_id}")
 
 async def broadcast_atomic_transaction_complete(transaction_id: str, changes: List[dict], restaurant_id: int = 1):
@@ -503,10 +505,12 @@ async def broadcast_atomic_transaction_complete(transaction_id: str, changes: Li
         "type": "atomic_transaction_complete",
         "transaction_id": transaction_id,
         "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
-        "restaurant_id": restaurant_id,
+        "restaurant_id": str(restaurant_id),
         "changes": changes
     }
-    await realtime_manager.broadcast_to_all(message)
+    
+    # 🚨 CRITICAL FIX: Use realtime_broadcaster instead of realtime_manager
+    await realtime_broadcaster.broadcast_data_change(str(restaurant_id), message)
     logger.info(f"Broadcasted atomic_transaction_complete for transaction {transaction_id} with {len(changes)} changes")
 
 # Export the broadcast functions for use in other modules
