@@ -430,24 +430,42 @@ async def broadcast_guest_deleted(guest_id: str):
     await realtime_manager.broadcast_to_all(message)
     logger.info(f"Broadcasted guest_deleted for guest {guest_id}")
 
-async def broadcast_table_updated(table: RestaurantTable):
-    """Broadcast table_updated event to all connected iOS clients with optimization"""
+async def broadcast_table_updated(table: RestaurantTable, action: str = "updated"):
+    """Broadcast table_updated event to all connected iOS clients - FIXED FOR iOS REQUIREMENTS"""
     try:
-        # Use optimized broadcast function
-        await optimized_table_broadcast(table, "table_updated")
-        
-        # Legacy iOS-compatible message format for backward compatibility
+        # iOS-compatible message format (EXACT MATCH)
         message = {
             "type": "table_updated",
+            "restaurant_id": str(table.restaurant_id),
+            "table_id": str(table.id),
+            "action": action,  # "assigned", "cleared", "updated", etc.
             "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
-            "guest": None,
-            "table": table_to_ios_format(table),
-            "guestId": None
+            "data": {
+                "id": str(table.id),
+                "tableNumber": table.table_number,
+                "capacity": table.capacity,
+                "status": table.status,
+                "position": {
+                    "x": float(table.position_x or 0.0),
+                    "y": float(table.position_y or 0.0)
+                },
+                "currentGuestId": str(table.current_guest_id) if table.current_guest_id else None,
+                "section": table.section
+            }
         }
+        
+        # Add debug logging as requested by iOS team
+        logger.info(f"📡 Broadcasting table_updated to all clients for restaurant {table.restaurant_id}")
+        logger.info(f"🎯 Table {table.id} action: {action}, status: {table.status}")
+        logger.info(f"📄 Message: {json.dumps(message)}")
+        
         await realtime_manager.broadcast_to_all(message)
-        logger.info(f"Broadcasted table_updated for table {table.id}")
+        logger.info(f"✅ Successfully broadcasted table_updated for table {table.id}")
+        
     except Exception as e:
-        logger.error(f"Error broadcasting table_updated: {e}")
+        logger.error(f"❌ Error broadcasting table_updated: {e}")
+        import traceback
+        traceback.print_exc()
 
 async def broadcast_delta_update(changes: List[dict], restaurant_id: int = 1):
     """

@@ -187,6 +187,15 @@ async def update_table(
     
     # 🚀 REAL-TIME BROADCAST: PRIORITY #3 - Table status updates
     try:
+        # Determine action based on what changed
+        action = "updated"
+        if is_clearing_table:
+            action = "cleared"
+        elif table_data.status == "occupied":
+            action = "assigned"
+        elif table_data.current_guest_id or table_data.currentGuestId:
+            action = "assigned"
+        
         await realtime_broadcaster.broadcast_table_updated(
             restaurant_id=restaurant_id,
             table_id=str(table.id),
@@ -199,11 +208,20 @@ async def update_table(
     except Exception as e:
         logger.warning(f"Failed to broadcast real-time table_updated: {e}")
     
-    # Legacy broadcast for backward compatibility
+    # iOS-compatible broadcast with action parameter
     try:
-        await broadcast_table_updated(table)
+        action = "updated"
+        if is_clearing_table:
+            action = "cleared"
+        elif table_data.status == "occupied":
+            action = "assigned"
+        elif table_data.current_guest_id or table_data.currentGuestId:
+            action = "assigned"
+            
+        await broadcast_table_updated(table, action)
+        logger.info(f"📡 iOS broadcast sent for table {table.id} action: {action}")
     except Exception as e:
-        logger.warning(f"Failed to broadcast legacy table_updated: {e}")
+        logger.warning(f"Failed to broadcast iOS table_updated: {e}")
     
     return table_to_response(table)
 
@@ -246,7 +264,7 @@ async def create_table(
     db.add(table)
     db.commit()
     db.refresh(table)
-    
+
     # Log activity
     log_activity(
         db=db,
@@ -258,9 +276,14 @@ async def create_table(
         new_data={"table_number": table.table_number, "capacity": table.capacity}
     )
     
-    return table_to_response(table)
+    # 📡 REAL-TIME BROADCAST: Table creation
+    try:
+        await broadcast_table_updated(table, "created")
+        logger.info(f"📡 iOS broadcast sent for table creation: {table.id}")
+    except Exception as e:
+        logger.warning(f"Failed to broadcast table creation: {e}")
 
-@router.delete("/{restaurant_id}/tables/{table_id}")
+    return table_to_response(table)@router.delete("/{restaurant_id}/tables/{table_id}")
 async def delete_table(
     restaurant_id: str = Path(..., description="Restaurant ID"),
     table_id: str = Path(..., description="Table ID"),

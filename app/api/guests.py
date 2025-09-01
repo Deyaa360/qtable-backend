@@ -61,7 +61,7 @@ def validate_walk_in_guest(guest_data: GuestCreate) -> GuestCreate:
     
     return guest_data
 
-def sync_guest_table_relationship(db: Session, guest_id: str, table_id: Optional[str], old_table_id: Optional[str] = None):
+async def sync_guest_table_relationship(db: Session, guest_id: str, table_id: Optional[str], old_table_id: Optional[str] = None):
     """
     Synchronize the bidirectional relationship between guest and table.
     When a guest is assigned to a table, update the table's current_guest_id.
@@ -76,6 +76,13 @@ def sync_guest_table_relationship(db: Session, guest_id: str, table_id: Optional
             # If table is not occupied, ensure it's available
             if old_table.status == "occupied":
                 old_table.status = "available"
+            
+            # 📡 CRITICAL: Broadcast table cleared
+            try:
+                await broadcast_table_updated(old_table, "cleared")
+                logger.info(f"📡 Broadcasted table cleared: {old_table.id}")
+            except Exception as e:
+                logger.warning(f"Failed to broadcast table cleared: {e}")
     
     # Set new table assignment
     if table_id:
@@ -91,6 +98,13 @@ def sync_guest_table_relationship(db: Session, guest_id: str, table_id: Optional
             # Assign table to new guest and set status to occupied
             table.current_guest_id = guest_id
             table.status = "occupied"  # ENFORCE: Only occupied tables have currentGuestId
+            
+            # 📡 CRITICAL: Broadcast table assigned
+            try:
+                await broadcast_table_updated(table, "assigned")
+                logger.info(f"📡 Broadcasted table assigned: {table.id} to guest {guest_id}")
+            except Exception as e:
+                logger.warning(f"Failed to broadcast table assigned: {e}")
     else:
         # If no table_id provided, ensure no table claims this guest
         tables_with_guest = db.query(RestaurantTable).filter(RestaurantTable.current_guest_id == guest_id).all()
@@ -98,6 +112,13 @@ def sync_guest_table_relationship(db: Session, guest_id: str, table_id: Optional
             table.current_guest_id = None
             if table.status == "occupied":
                 table.status = "available"
+            
+            # 📡 CRITICAL: Broadcast table cleared
+            try:
+                await broadcast_table_updated(table, "cleared")
+                logger.info(f"📡 Broadcasted table cleared: {table.id}")
+            except Exception as e:
+                logger.warning(f"Failed to broadcast table cleared: {e}")
 
 async def handle_guest_status_change(db: Session, guest: Guest, old_status: str, new_status: str):
     """
@@ -118,7 +139,8 @@ async def handle_guest_status_change(db: Session, guest: Guest, old_status: str,
                 
                 # Broadcast table update to all connected iOS devices
                 try:
-                    await broadcast_table_updated(table)
+                    await broadcast_table_updated(table, "cleared")
+                    logger.info(f"📡 Broadcasted table cleared: {table.id}")
                 except Exception as e:
                     logger.warning(f"Failed to broadcast table_updated: {e}")
             
@@ -364,7 +386,7 @@ async def update_guest(
     
     # Sync guest-table relationship if table assignment changed
     if guest_data.table_id is not None and guest.table_id != old_table_id:
-        sync_guest_table_relationship(db, guest_id, guest.table_id, old_table_id)
+        await sync_guest_table_relationship(db, guest_id, guest.table_id, old_table_id)
     
     db.commit()
     db.refresh(guest)
