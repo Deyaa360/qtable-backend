@@ -2,9 +2,13 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
+import logging
 from app.config import settings
 from app.api import auth, tables, reservations, guests, websockets
 from app.api import batch, dashboard, atomic, sync
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
@@ -68,14 +72,14 @@ app.include_router(sync.router)  # Full and delta sync endpoints
 # Startup event
 @app.on_event("startup")
 async def startup_event():
-    print("🚀 QTable API Server starting up...")
-    print(f"📊 Environment: {settings.environment}")
-    print(f"🗄️  Database: {settings.database_url[:50]}...")
+    logger.info("🚀 QTable API Server starting up...")
+    logger.info(f"📊 Environment: {settings.environment}")
+    logger.info(f"🗄️  Database: {settings.database_url[:50]}...")
     
 # Shutdown event
 @app.on_event("shutdown")
 async def shutdown_event():
-    print("👋 QTable API Server shutting down...")
+    logger.info("👋 QTable API Server shutting down...")
 
 if __name__ == "__main__":
     uvicorn.run(

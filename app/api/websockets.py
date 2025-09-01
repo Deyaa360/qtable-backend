@@ -203,10 +203,10 @@ def table_to_ios_format(table: RestaurantTable) -> dict:
     }
 
 @router.websocket("/realtime")
-async def realtime_websocket_endpoint(websocket: WebSocket, restaurant_id: str = "test-restaurant-1"):
+async def realtime_websocket_endpoint(websocket: WebSocket, restaurant_id: str):
     """
     WebSocket endpoint for real-time updates matching iOS specifications
-    URL: ws://your-domain.com/realtime?restaurant_id=test-restaurant-1
+    URL: ws://your-domain.com/realtime?restaurant_id={restaurant_id}
     """
     try:
         # Use the new realtime broadcaster that supports restaurant-specific connections

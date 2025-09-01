@@ -173,7 +173,7 @@ async def get_guests(
 ):
     """Get all guests for a restaurant"""
     guests = db.query(Guest).filter(
-        # Guest.restaurant_id == restaurant_id  # Temporarily disabled for testing
+        Guest.restaurant_id == restaurant.id
     ).order_by(Guest.created_at.desc()).all()
     
     return [guest_to_response(guest) for guest in guests]
