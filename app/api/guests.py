@@ -267,17 +267,25 @@ async def create_guest(
         
         # 🚀 REAL-TIME BROADCAST: Notify all connected devices immediately
         try:
+            # Prepare complete guest data for iOS
+            complete_guest_data = {
+                "guestName": f"{guest.first_name or ''} {guest.last_name or ''}".strip(),
+                "firstName": guest.first_name or '',
+                "lastName": guest.last_name or '',
+                "partySize": guest.party_size or 1,
+                "status": guest.status,
+                "table_id": str(guest.table_id) if guest.table_id else None,
+                "email": guest.email or '',
+                "phone": guest.phone or '',
+                "notes": guest.notes or ''
+            }
+            
             await realtime_broadcaster.broadcast_guest_created(
                 restaurant_id=restaurant_id,
                 guest_id=str(guest.id),
-                guest_data={
-                    "first_name": guest.first_name,
-                    "last_name": guest.last_name,
-                    "party_size": guest.party_size,
-                    "status": guest.status
-                }
+                guest_data=complete_guest_data
             )
-            logger.info(f"📡 Real-time broadcast sent for new guest: {guest.id}")
+            logger.info(f"📡 Real-time guest_created broadcast sent for new guest: {guest.id}")
         except Exception as e:
             logger.warning(f"Failed to broadcast real-time guest_created: {e}")
         
@@ -412,18 +420,33 @@ async def update_guest(
     # 🚀 REAL-TIME BROADCAST: PRIORITY #1 - Guest status updates
     try:
         # Determine the action type for better messaging
-        action = "status_change" if guest_data.status is not None else "update"
+        if guest_data.status is not None:
+            action = "status_changed"
+        elif guest_data.table_id is not None:
+            action = "table_assigned" if guest_data.table_id else "table_cleared"
+        else:
+            action = "info_updated"
+        
+        # Prepare complete guest data for iOS
+        complete_guest_data = {
+            "guestName": f"{guest.first_name or ''} {guest.last_name or ''}".strip(),
+            "firstName": guest.first_name or '',
+            "lastName": guest.last_name or '',
+            "partySize": guest.party_size or 1,
+            "status": guest.status,
+            "table_id": str(guest.table_id) if guest.table_id else None,
+            "email": guest.email or '',
+            "phone": guest.phone or '',
+            "notes": guest.notes or ''
+        }
         
         await realtime_broadcaster.broadcast_guest_updated(
             restaurant_id=restaurant_id,
             guest_id=str(guest.id),
             action=action,
-            guest_data={
-                "status": guest.status,
-                "table_id": str(guest.table_id) if guest.table_id else None
-            }
+            guest_data=complete_guest_data
         )
-        logger.info(f"📡 Real-time broadcast sent for guest update: {guest.id}")
+        logger.info(f"📡 Real-time guest_updated broadcast sent for guest {guest.id} with action: {action}")
     except Exception as e:
         logger.warning(f"Failed to broadcast real-time guest_updated: {e}")
     
@@ -608,7 +631,32 @@ async def update_guest_status_atomic(
                 new_data={"status": new_status, "transaction_id": transaction_id}
             )
             
-            # Broadcast atomic changes to all connected iOS devices
+            # 🚀 REAL-TIME BROADCAST: Send guest_updated message (iOS requirement)
+            try:
+                # Prepare complete guest data for iOS
+                complete_guest_data = {
+                    "guestName": f"{guest.first_name or ''} {guest.last_name or ''}".strip(),
+                    "firstName": guest.first_name or '',
+                    "lastName": guest.last_name or '',
+                    "partySize": guest.party_size or 1,
+                    "status": guest.status,
+                    "table_id": str(guest.table_id) if guest.table_id else None,
+                    "email": guest.email or '',
+                    "phone": guest.phone or '',
+                    "notes": guest.notes or ''
+                }
+                
+                await realtime_broadcaster.broadcast_guest_updated(
+                    restaurant_id=restaurant_id,
+                    guest_id=str(guest.id),
+                    action="status_changed",
+                    guest_data=complete_guest_data
+                )
+                logger.info(f"📡 Real-time guest_updated broadcast sent for atomic guest {guest.id}")
+            except Exception as e:
+                logger.warning(f"Failed to broadcast guest_updated: {e}")
+            
+            # Legacy broadcast for compatibility
             try:
                 await broadcast_delta_update(changes, restaurant_id=int(restaurant_id))
             except Exception as e:

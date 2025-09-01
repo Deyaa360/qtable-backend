@@ -66,23 +66,53 @@ class RealtimeDataBroadcaster:
         logger.debug(f"🎯 Message: {json_message}")
     
     async def broadcast_guest_created(self, restaurant_id: str, guest_id: str, guest_data: dict):
-        """Broadcast new guest creation"""
+        """
+        Broadcast new guest creation with complete data format matching iOS requirements
+        
+        Args:
+            restaurant_id: ID of the restaurant
+            guest_id: ID of the newly created guest
+            guest_data: Dictionary with complete guest data
+        """
         message = {
             "type": "guest_created",
             "restaurant_id": restaurant_id,
             "guest_id": guest_id,
+            "action": "created",
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "data": {
                 "id": guest_id,
-                "guestName": f"{guest_data.get('first_name', '')} {guest_data.get('last_name', '')}".strip(),
-                "partySize": guest_data.get('party_size', 0),
-                "status": guest_data.get('status', 'waiting')
+                "guestName": guest_data.get('guestName', guest_data.get('name', 'Unknown Guest')),
+                "firstName": guest_data.get('firstName', ''),
+                "lastName": guest_data.get('lastName', ''),
+                "partySize": guest_data.get('partySize', guest_data.get('party_size', 1)),
+                "status": guest_data.get('status', 'waiting'),
+                "table_id": guest_data.get('table_id'),
+                "email": guest_data.get('email', ''),
+                "phone": guest_data.get('phone', ''),
+                "notes": guest_data.get('notes', '')
             }
         }
+        
+        # Add debug logging to track what we're sending
+        logger.info(f"📡 Broadcasting guest_created to all clients for restaurant {restaurant_id}")
+        logger.info(f"🎯 New guest {guest_id} created with status: {guest_data.get('status')}")
+        logger.debug(f"📄 Message: {message}")
+        
         await self.broadcast_data_change(restaurant_id, message)
+        
+        logger.info(f"✅ Successfully broadcasted guest_created for guest {guest_id}")
     
     async def broadcast_guest_updated(self, restaurant_id: str, guest_id: str, action: str, guest_data: dict):
-        """Broadcast guest status update"""
+        """
+        Broadcast guest status update with complete data format matching iOS requirements
+        
+        Args:
+            restaurant_id: ID of the restaurant
+            guest_id: ID of the guest being updated
+            action: Type of action (status_changed, table_assigned, table_cleared, info_updated)
+            guest_data: Dictionary with guest data including status, table_id, name, etc.
+        """
         message = {
             "type": "guest_updated",
             "restaurant_id": restaurant_id,
@@ -91,11 +121,26 @@ class RealtimeDataBroadcaster:
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "data": {
                 "id": guest_id,
+                "guestName": guest_data.get('guestName', guest_data.get('name', 'Unknown Guest')),
+                "firstName": guest_data.get('firstName', ''),
+                "lastName": guest_data.get('lastName', ''),
+                "partySize": guest_data.get('partySize', guest_data.get('party_size', 1)),
                 "status": guest_data.get('status'),
-                "table_id": guest_data.get('table_id')
+                "table_id": guest_data.get('table_id'),
+                "email": guest_data.get('email', ''),
+                "phone": guest_data.get('phone', ''),
+                "notes": guest_data.get('notes', '')
             }
         }
+        
+        # Add debug logging to track what we're sending
+        logger.info(f"📡 Broadcasting guest_updated to all clients for restaurant {restaurant_id}")
+        logger.info(f"🎯 Guest {guest_id} action: {action}, status: {guest_data.get('status')}")
+        logger.debug(f"📄 Message: {message}")
+        
         await self.broadcast_data_change(restaurant_id, message)
+        
+        logger.info(f"✅ Successfully broadcasted guest_updated for guest {guest_id}")
     
     async def broadcast_guest_deleted(self, restaurant_id: str, guest_id: str):
         """Broadcast guest deletion"""
