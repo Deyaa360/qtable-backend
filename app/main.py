@@ -78,10 +78,13 @@ async def startup_event():
     
     # Initialize database on startup
     try:
-        from app.database import engine
-        from app.models import Base
+        from app.database import engine, Base, SessionLocal
+        # Import ALL models so they register with Base
         from app.models.user import User
-        from app.database import SessionLocal
+        from app.models.restaurant import Restaurant
+        from app.models.table import RestaurantTable
+        from app.models.guest import Guest
+        from app.models.reservation import Reservation
         from app.utils.security import get_password_hash
         
         logger.info("🔧 Initializing database...")
