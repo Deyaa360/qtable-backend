@@ -75,7 +75,47 @@ async def startup_event():
     logger.info("🚀 QTable API Server starting up...")
     logger.info(f"📊 Environment: {settings.environment}")
     logger.info(f"🗄️  Database: {settings.database_url[:50]}...")
-    logger.info("✅ Database should be initialized by init_database.py")
+    
+    # Initialize database on startup
+    try:
+        from app.database import engine
+        from app.models import Base
+        from app.models.user import User
+        from app.database import SessionLocal
+        from app.utils.security import get_password_hash
+        
+        logger.info("🔧 Initializing database...")
+        
+        # Create all tables
+        Base.metadata.create_all(bind=engine)
+        logger.info("✅ Database tables created")
+        
+        # Create admin user if not exists
+        db = SessionLocal()
+        try:
+            admin_user = db.query(User).filter(User.email == "test@restaurant.com").first()
+            if not admin_user:
+                logger.info("👤 Creating admin user...")
+                admin_user = User(
+                    email="test@restaurant.com",
+                    username="admin",
+                    full_name="Test Admin",
+                    hashed_password=get_password_hash("password123"),
+                    is_admin=True,
+                    is_active=True
+                )
+                db.add(admin_user)
+                db.commit()
+                logger.info("✅ Admin user created")
+            else:
+                logger.info("✅ Admin user exists")
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"❌ Database init failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
     
 # Shutdown event
 @app.on_event("shutdown")
