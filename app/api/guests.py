@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Path
 from sqlalchemy.orm import Session, joinedload, selectinload
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 from app.database import get_db
 from app.models import Guest, Reservation, Restaurant, User, RestaurantTable
@@ -413,6 +413,9 @@ async def update_guest(
     
     # 🚀 REAL-TIME BROADCAST: PRIORITY #1 - Guest status updates
     try:
+        # 🔍 DEBUG: Log the broadcast attempt for REGULAR endpoint
+        logger.info(f"🔍 [REGULAR UPDATE] About to send guest_updated broadcast for guest {guest.id}")
+        
         # Determine the action type for better messaging
         if guest_data.status is not None:
             action = "status_changed"
@@ -440,9 +443,11 @@ async def update_guest(
             action=action,
             guest_data=complete_guest_data
         )
-        logger.info(f"📡 Real-time guest_updated broadcast sent for guest {guest.id} with action: {action}")
+        logger.info(f"� [REGULAR UPDATE] Successfully sent guest_updated broadcast for guest {guest.id} with action: {action}")
     except Exception as e:
-        logger.warning(f"Failed to broadcast real-time guest_updated: {e}")
+        logger.error(f"🔍 [REGULAR UPDATE] Failed to broadcast guest_updated: {e}")
+        import traceback
+        logger.error(f"🔍 [REGULAR UPDATE] Traceback: {traceback.format_exc()}")
     
     return guest_to_response(guest)
 
@@ -621,6 +626,9 @@ async def update_guest_status_atomic(
             
             # 🚀 REAL-TIME BROADCAST: Send guest_updated message (iOS requirement)
             try:
+                # 🔍 DEBUG: Log the broadcast attempt for ATOMIC endpoint
+                logger.info(f"🔍 [ATOMIC UPDATE] About to send guest_updated broadcast for guest {guest.id}")
+                
                 # Prepare complete guest data for iOS
                 complete_guest_data = {
                     "guestName": f"{guest.first_name or ''} {guest.last_name or ''}".strip(),
@@ -640,9 +648,41 @@ async def update_guest_status_atomic(
                     action="status_changed",
                     guest_data=complete_guest_data
                 )
-                logger.info(f"📡 Real-time guest_updated broadcast sent for atomic guest {guest.id}")
+                logger.info(f"� [ATOMIC UPDATE] Successfully sent guest_updated broadcast for guest {guest.id}")
             except Exception as e:
-                logger.warning(f"Failed to broadcast guest_updated: {e}")
+                logger.error(f"🔍 [ATOMIC UPDATE] Failed to broadcast guest_updated: {e}")
+                import traceback
+                logger.error(f"🔍 [ATOMIC UPDATE] Traceback: {traceback.format_exc()}")
+            
+            # 🚀 REAL-TIME BROADCAST: Send atomic_transaction_complete message AFTER guest_updated
+            try:
+                # 🔍 DEBUG: Log the atomic transaction complete broadcast
+                logger.info(f"🔍 [ATOMIC UPDATE] About to send atomic_transaction_complete for transaction {transaction_id}")
+                
+                # Prepare result data
+                result_data = {
+                    "guest_id": guest_id,
+                    "old_status": old_status,
+                    "new_status": new_status,
+                    "table_cleared": old_table_id is not None and new_status in ["Finished", "Cancelled", "No Show"],
+                    "changes_count": len(changes),
+                    "processed_at": datetime.now(timezone.utc).isoformat()
+                }
+                
+                await realtime_broadcaster.broadcast_atomic_transaction_complete(
+                    restaurant_id=restaurant_id,
+                    transaction_id=transaction_id,
+                    action="guest_status_updated",
+                    guest_id=str(guest.id),
+                    table_id=str(old_table_id) if old_table_id else None,
+                    result=result_data
+                )
+                logger.info(f"🔍 [ATOMIC UPDATE] Successfully sent atomic_transaction_complete for transaction {transaction_id}")
+                
+            except Exception as e:
+                logger.error(f"🔍 [ATOMIC UPDATE] Failed to broadcast atomic_transaction_complete: {e}")
+                import traceback
+                logger.error(f"🔍 [ATOMIC UPDATE] Traceback: {traceback.format_exc()}")
             
             logger.info(f"Atomic guest status update {transaction_id} completed successfully")
             
