@@ -1,4 +1,5 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, status, Query
+from fastapi.responses import HTMLResponse
 from typing import Dict, List, Optional, Union
 import json
 import asyncio
@@ -203,7 +204,7 @@ def table_to_ios_format(table: RestaurantTable) -> dict:
     }
 
 @router.websocket("/realtime")
-async def realtime_websocket_endpoint(websocket: WebSocket, restaurant_id: str):
+async def realtime_websocket_endpoint(websocket: WebSocket, restaurant_id: str = Query(...)):
     """
     WebSocket endpoint for real-time updates matching iOS specifications
     URL: ws://your-domain.com/realtime?restaurant_id={restaurant_id}
