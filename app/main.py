@@ -75,64 +75,7 @@ async def startup_event():
     logger.info("🚀 QTable API Server starting up...")
     logger.info(f"📊 Environment: {settings.environment}")
     logger.info(f"🗄️  Database: {settings.database_url[:50]}...")
-    
-    # Create database tables first
-    try:
-        from app.database import engine
-        from app.models import Base
-        
-        logger.info("🗄️  Creating database tables...")
-        Base.metadata.create_all(bind=engine)
-        logger.info("✅ Database tables created successfully")
-        
-    except Exception as e:
-        logger.error(f"❌ Failed to create database tables: {str(e)}")
-        # Don't stop the server, but log the error
-    
-    # Create admin user and restaurant if they don't exist
-    try:
-        from app.database import get_db
-        from app.models import User, Restaurant
-        from app.utils.security import get_password_hash
-        
-        db = next(get_db())
-        
-        # Check if admin user exists
-        admin_email = "test@restaurant.com"
-        existing_admin = db.query(User).filter(User.email == admin_email).first()
-        
-        if not existing_admin:
-            logger.info("🔧 Creating admin user and restaurant...")
-            
-            # Create restaurant first
-            restaurant = Restaurant(
-                name="QTable Restaurant",
-                slug="qtable-restaurant",
-                address="123 Restaurant Street, City, State"
-            )
-            db.add(restaurant)
-            db.flush()  # Get the restaurant ID
-            
-            # Create admin user
-            admin_user = User(
-                email=admin_email,
-                hashed_password=get_password_hash("password123"),
-                full_name="Restaurant Admin",
-                role="admin",
-                restaurant_id=restaurant.id
-            )
-            db.add(admin_user)
-            db.commit()
-            
-            logger.info(f"✅ Admin user created: {admin_email}")
-            logger.info(f"✅ Restaurant created: {restaurant.name} (ID: {restaurant.id})")
-        else:
-            logger.info(f"✅ Admin user already exists: {admin_email}")
-            
-        db.close()
-    except Exception as e:
-        logger.error(f"❌ Failed to create admin user: {str(e)}")
-        # Don't stop the server if admin creation fails
+    logger.info("✅ Database should be initialized by init_database.py")
     
 # Shutdown event
 @app.on_event("shutdown")
