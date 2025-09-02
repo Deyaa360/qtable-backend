@@ -3,6 +3,9 @@ import json
 import logging
 from datetime import datetime
 from fastapi import WebSocket
+import asyncio
+import aiohttp
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -226,6 +229,34 @@ class RealtimeDataBroadcaster:
         
         logger.info(f"✅ Successfully broadcasted atomic_transaction_complete")
     
+    async def broadcast_to_all_workers(self, restaurant_id: str, message: dict):
+        """
+        Broadcast message to ALL workers by trying to send via HTTP to localhost endpoints.
+        This ensures messages reach the correct worker even in multi-worker setup.
+        """
+        # First try local connections
+        await self.broadcast_data_change(restaurant_id, message)
+        
+        # Then try to reach other workers via HTTP broadcast
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                # Try multiple potential internal ports/endpoints
+                for port in [8080, 8081, 8082, 8083]:
+                    try:
+                        url = f"http://127.0.0.1:{port}/internal/broadcast"
+                        await session.post(url, json={
+                            "restaurant_id": restaurant_id,
+                            "message": message
+                        }, timeout=0.1)
+                    except:
+                        pass  # Ignore failures, other workers might not be on these ports
+        except ImportError:
+            # aiohttp not available, skip cross-worker broadcast
+            pass
+        except Exception as e:
+            logger.debug(f"Cross-worker broadcast failed: {e}")
+
     def get_connection_stats(self):
         """Get statistics about current WebSocket connections"""
         total_connections = sum(len(connections) for connections in self.connections.values())

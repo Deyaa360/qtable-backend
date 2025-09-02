@@ -240,11 +240,16 @@ async def batch_update(
                     "notes": guest.notes or ''
                 }
                 
-                await realtime_broadcaster.broadcast_guest_updated(
+                await realtime_broadcaster.broadcast_to_all_workers(
                     restaurant_id=restaurant_id,
-                    guest_id=str(guest.id),
-                    action="status_changed",  # Primary action for batch updates
-                    guest_data=guest_data
+                    message={
+                        "type": "guest_updated",
+                        "restaurant_id": restaurant_id,
+                        "guest_id": str(guest.id),
+                        "action": "status_changed",
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                        "data": guest_data
+                    }
                 )
                 logger.error(f"[BATCH] [BATCH] ✅ Successfully broadcasted guest_updated for guest {guest.id}")
             
@@ -252,18 +257,23 @@ async def batch_update(
             for table in updated_tables:
                 logger.error(f"🚨 [BATCH] About to broadcast table_updated for table {table.id}")
                 
-                await realtime_broadcaster.broadcast_table_updated(
+                await realtime_broadcaster.broadcast_to_all_workers(
                     restaurant_id=restaurant_id,
-                    table_id=str(table.id),
-                    action="status_changed",
-                    table_data={
-                        "id": str(table.id),
-                        "table_number": table.tableNumber,
-                        "status": table.status,
-                        "current_guest_id": str(table.currentGuestId) if table.currentGuestId else None,
-                        "capacity": table.capacity,
-                        "x": table.position.get("x", 0.0) if table.position else 0.0,
-                        "y": table.position.get("y", 0.0) if table.position else 0.0
+                    message={
+                        "type": "table_updated",
+                        "restaurant_id": restaurant_id,
+                        "table_id": str(table.id),
+                        "action": "status_changed",
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                        "data": {
+                            "id": str(table.id),
+                            "tableNumber": table.tableNumber,
+                            "status": table.status,
+                            "currentGuestId": str(table.currentGuestId) if table.currentGuestId else None,
+                            "capacity": table.capacity,
+                            "x": table.position.get("x", 0.0) if table.position else 0.0,
+                            "y": table.position.get("y", 0.0) if table.position else 0.0
+                        }
                     }
                 )
                 logger.error(f"[BATCH] [BATCH] ✅ Successfully broadcasted table_updated for table {table.id}")
@@ -283,9 +293,14 @@ async def batch_update(
             
             logger.error(f"🚨 [BATCH] About to broadcast atomic_transaction_complete for {len(affected_entities)} entities")
             
-            await realtime_broadcaster.broadcast_atomic_transaction_complete(
+            await realtime_broadcaster.broadcast_to_all_workers(
                 restaurant_id=restaurant_id,
-                affected_entities=affected_entities
+                message={
+                    "type": "atomic_transaction_complete",
+                    "restaurant_id": restaurant_id,
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "affected_entities": affected_entities
+                }
             )
             logger.error(f"[BATCH] [BATCH] ✅ Successfully broadcasted atomic_transaction_complete")
         except Exception as e:
