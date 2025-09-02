@@ -258,12 +258,12 @@ async def batch_update(
                     action="status_changed",
                     table_data={
                         "id": str(table.id),
-                        "table_number": table.table_number,
+                        "table_number": table.tableNumber,
                         "status": table.status,
-                        "current_guest_id": str(table.current_guest_id) if table.current_guest_id else None,
+                        "current_guest_id": str(table.currentGuestId) if table.currentGuestId else None,
                         "capacity": table.capacity,
-                        "x": table.position.get("x", 0.0),
-                        "y": table.position.get("y", 0.0)
+                        "x": table.position.get("x", 0.0) if table.position else 0.0,
+                        "y": table.position.get("y", 0.0) if table.position else 0.0
                     }
                 )
                 logger.error(f"[BATCH] [BATCH] ✅ Successfully broadcasted table_updated for table {table.id}")
