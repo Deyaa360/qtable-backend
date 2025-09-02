@@ -363,6 +363,13 @@ class RedisRealtimeBroadcaster:
         """Compatibility property - returns local connections"""
         return self.local_connections
 
+    def get_connection_stats(self):
+        """Return connection statistics for debugging"""
+        stats = {}
+        for restaurant_id, connections in self.local_connections.items():
+            stats[restaurant_id] = len(connections)
+        return stats
+
 
 # Create a global instance for the application to use
 redis_broadcaster = RedisRealtimeBroadcaster()
