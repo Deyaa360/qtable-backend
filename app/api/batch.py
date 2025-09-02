@@ -130,6 +130,12 @@ async def batch_update(
     Batch update endpoint for high-performance operations.
     Updates multiple guests and tables atomically in a single transaction.
     """
+    # 🚨 CRITICAL DEBUG: Use error level so it shows in Railway logs
+    logger.error(f"🚨 [BATCH ENDPOINT] CALLED! Restaurant: {restaurant_id}")
+    logger.error(f"🚨 [BATCH ENDPOINT] Guests to update: {len(batch_data.guests or [])}")
+    logger.error(f"🚨 [BATCH ENDPOINT] Tables to update: {len(batch_data.tables or [])}")
+    logger.error(f"🚨 [BATCH ENDPOINT] Current timestamp: {datetime.utcnow()}")
+    
     logger.info(f"Batch update request: {len(batch_data.guests or [])} guests, {len(batch_data.tables or [])} tables")
     
     updated_guests = []
@@ -213,8 +219,15 @@ async def batch_update(
         
         # 🚀 REAL-TIME BROADCAST: Send individual entity updates first
         try:
+            # 🚨 CRITICAL DEBUG: Add error-level logging so it shows up in Railway
+            logger.error(f"🚨 [BATCH] Starting broadcasts for {len(updated_guests)} guests, {len(updated_tables)} tables")
+            logger.error(f"🚨 [BATCH] Restaurant ID: {restaurant_id}")
+            logger.error(f"🚨 [BATCH] WebSocket connections: {realtime_broadcaster.connections}")
+            
             # Broadcast individual guest updates (iOS requires these!)
             for guest in updated_guests:
+                logger.error(f"🚨 [BATCH] About to broadcast guest_updated for guest {guest.id}")
+                
                 guest_data = {
                     "guestName": f"{guest.first_name or ''} {guest.last_name or ''}".strip(),
                     "firstName": guest.first_name or '',
@@ -233,10 +246,12 @@ async def batch_update(
                     action="status_changed",  # Primary action for batch updates
                     guest_data=guest_data
                 )
-                logger.info(f"📡 [BATCH] Broadcasted guest_updated for guest {guest.id}")
+                logger.error(f"� [BATCH] ✅ Successfully broadcasted guest_updated for guest {guest.id}")
             
             # Broadcast individual table updates
             for table in updated_tables:
+                logger.error(f"🚨 [BATCH] About to broadcast table_updated for table {table.id}")
+                
                 await realtime_broadcaster.broadcast_table_updated(
                     restaurant_id=restaurant_id,
                     table_id=str(table.id),
@@ -251,10 +266,12 @@ async def batch_update(
                         "y": table.y
                     }
                 )
-                logger.info(f"📡 [BATCH] Broadcasted table_updated for table {table.id}")
+                logger.error(f"� [BATCH] ✅ Successfully broadcasted table_updated for table {table.id}")
                 
         except Exception as e:
-            logger.error(f"Failed to broadcast individual entity updates: {e}")
+            logger.error(f"🚨 [BATCH] ❌ Failed to broadcast individual entity updates: {e}")
+            import traceback
+            logger.error(f"🚨 [BATCH] ❌ Traceback: {traceback.format_exc()}")
         
         # 🚀 REAL-TIME BROADCAST: PRIORITY #4 - Atomic transaction complete AFTER individual updates
         try:
@@ -264,13 +281,17 @@ async def batch_update(
             for table in updated_tables:
                 affected_entities.append(f"table-{table.id}")
             
+            logger.error(f"🚨 [BATCH] About to broadcast atomic_transaction_complete for {len(affected_entities)} entities")
+            
             await realtime_broadcaster.broadcast_atomic_transaction_complete(
                 restaurant_id=restaurant_id,
                 affected_entities=affected_entities
             )
-            logger.info(f"📡 [BATCH] Broadcasted atomic_transaction_complete: {len(affected_entities)} entities")
+            logger.error(f"� [BATCH] ✅ Successfully broadcasted atomic_transaction_complete")
         except Exception as e:
-            logger.error(f"Failed to broadcast atomic_transaction_complete: {e}")
+            logger.error(f"🚨 [BATCH] ❌ Failed to broadcast atomic_transaction_complete: {e}")
+            import traceback
+            logger.error(f"🚨 [BATCH] ❌ Traceback: {traceback.format_exc()}")
         
         # Log the batch operation
         log_activity(
