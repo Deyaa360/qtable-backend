@@ -17,11 +17,17 @@ class RealtimeDataBroadcaster:
         """Add a WebSocket connection for a restaurant"""
         await websocket.accept()
         
+        # Add critical debug info for multi-worker debugging
+        import os
+        worker_id = os.getpid()
+        logger.error(f"🔄 [WORKER-{worker_id}] WebSocket connecting for restaurant {restaurant_id}")
+        
         if restaurant_id not in self.connections:
             self.connections[restaurant_id] = []
         
         self.connections[restaurant_id].append(websocket)
-        logger.info(f"📡 WebSocket connected for restaurant {restaurant_id}. Total connections: {len(self.connections[restaurant_id])}")
+        logger.error(f"� [WORKER-{worker_id}] ✅ WebSocket connected for restaurant {restaurant_id}. Total connections: {len(self.connections[restaurant_id])}")
+        logger.error(f"🔄 [WORKER-{worker_id}] All connections: {dict(self.connections)}")
     
     def disconnect(self, websocket: WebSocket, restaurant_id: str):
         """Remove a WebSocket connection"""
@@ -38,8 +44,15 @@ class RealtimeDataBroadcaster:
         Broadcast data change to all connected clients for a restaurant
         Matches the exact format specified in BACKEND_REALTIME_REQUIREMENTS.md
         """
+        # Add critical debug info for multi-worker debugging
+        import os
+        worker_id = os.getpid()
+        logger.error(f"🔄 [WORKER-{worker_id}] Broadcasting {message.get('type')} to restaurant {restaurant_id}")
+        logger.error(f"🔄 [WORKER-{worker_id}] Current connections: {dict(self.connections)}")
+        
         if restaurant_id not in self.connections:
-            logger.debug(f"📡 No WebSocket connections for restaurant {restaurant_id}")
+            logger.error(f"� [WORKER-{worker_id}] ❌ No WebSocket connections for restaurant {restaurant_id}")
+            logger.error(f"🔄 [WORKER-{worker_id}] Available restaurants: {list(self.connections.keys())}")
             return
         
         # Convert to JSON string
@@ -87,7 +100,7 @@ class RealtimeDataBroadcaster:
                 "lastName": guest_data.get('lastName', ''),
                 "partySize": guest_data.get('partySize', guest_data.get('party_size', 1)),
                 "status": guest_data.get('status', 'waiting'),
-                "table_id": guest_data.get('table_id'),
+                "tableId": guest_data.get('tableId', guest_data.get('table_id')),
                 "email": guest_data.get('email', ''),
                 "phone": guest_data.get('phone', ''),
                 "notes": guest_data.get('notes', '')
@@ -213,13 +226,14 @@ class RealtimeDataBroadcaster:
         
         logger.info(f"✅ Successfully broadcasted atomic_transaction_complete")
     
-    def get_connection_stats(self) -> Dict:
-        """Get connection statistics for monitoring"""
+    def get_connection_stats(self):
+        """Get statistics about current WebSocket connections"""
+        total_connections = sum(len(connections) for connections in self.connections.values())
         return {
             "total_restaurants": len(self.connections),
-            "total_connections": sum(len(connections) for connections in self.connections.values()),
+            "total_connections": total_connections,
             "restaurant_breakdown": {
-                restaurant_id: len(connections) 
+                restaurant_id: len(connections)
                 for restaurant_id, connections in self.connections.items()
             }
         }
