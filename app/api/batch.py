@@ -41,15 +41,15 @@ def handle_guest_status_change_batch(db: Session, guest: Guest, old_status: str,
 
 def guest_to_batch_response(guest: Guest) -> BatchGuestResponse:
     """Convert database guest model to batch response schema"""
-    full_name = f"{guest.first_name or ''} {guest.last_name or ''}".strip()
+    full_name = f"{guest.firstName or ''} {guest.lastName or ''}".strip()
     if not full_name:
         full_name = "Unknown Guest"
     
     return BatchGuestResponse(
         id=str(guest.id),
         name=full_name,
-        firstName=guest.first_name or "",
-        lastName=guest.last_name or "",
+        firstName=guest.firstName or "",
+        lastName=guest.lastName or "",
         email=guest.email,
         phone=guest.phone,
         totalVisits=guest.total_visits,
@@ -229,9 +229,9 @@ async def batch_update(
                 logger.error(f"🚨 [BATCH] About to broadcast guest_updated for guest {guest.id}")
                 
                 guest_data = {
-                    "guestName": f"{guest.first_name or ''} {guest.last_name or ''}".strip(),
-                    "firstName": guest.first_name or '',
-                    "lastName": guest.last_name or '',
+                    "guestName": f"{guest.firstName or ''} {guest.lastName or ''}".strip(),
+                    "firstName": guest.firstName or '',
+                    "lastName": guest.lastName or '',
                     "partySize": guest.party_size or 1,
                     "status": guest.status,
                     "table_id": str(guest.table_id) if guest.table_id else None,

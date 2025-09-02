@@ -211,7 +211,10 @@ async def realtime_websocket_endpoint(websocket: WebSocket, restaurant_id: str =
     """
     try:
         # Use the new realtime broadcaster that supports restaurant-specific connections
+        logger.error(f"🔥 [WEBSOCKET] About to connect WebSocket for restaurant: {restaurant_id}")
         await realtime_broadcaster.connect(websocket, restaurant_id)
+        logger.error(f"🔥 [WEBSOCKET] WebSocket connected successfully for restaurant: {restaurant_id}")
+        logger.error(f"🔥 [WEBSOCKET] Current connections: {realtime_broadcaster.get_connection_stats()}")
         logger.info(f"iOS client connected to realtime WebSocket for restaurant: {restaurant_id}")
         
         # Send initial connection confirmation
