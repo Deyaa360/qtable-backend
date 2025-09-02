@@ -362,3 +362,10 @@ class RedisRealtimeBroadcaster:
     def connections(self):
         """Compatibility property - returns local connections"""
         return self.local_connections
+
+
+# Create a global instance for the application to use
+redis_broadcaster = RedisRealtimeBroadcaster()
+
+# Export for easy importing
+__all__ = ['RedisRealtimeBroadcaster', 'redis_broadcaster']
