@@ -63,7 +63,7 @@ class RealtimeDataBroadcaster:
             self.disconnect(ws, restaurant_id)
         
         logger.info(f"📡 Broadcasting {message['type']} to {successful_broadcasts} clients for restaurant {restaurant_id}")
-        logger.debug(f"�� Message: {json_message}")
+        logger.debug(f"🎯 Message: {json_message}")
     
     async def broadcast_guest_created(self, restaurant_id: str, guest_id: str, guest_data: dict):
         """
@@ -155,46 +155,20 @@ class RealtimeDataBroadcaster:
         }
         await self.broadcast_data_change(restaurant_id, message)
     
-    async def broadcast_table_updated(self, restaurant_id: str, table_id: str, action: str, table_data: dict):
-        """
-        Broadcast table status update with complete data format matching iOS requirements
-        
-        Args:
-            restaurant_id: ID of the restaurant
-            table_id: ID of the table being updated
-            action: Type of action (status_changed, guest_assigned, guest_cleared, updated)
-            table_data: Dictionary with complete table data
-        """
+    async def broadcast_table_updated(self, restaurant_id: str, table_id: str, table_data: dict):
+        """Broadcast table status update"""
         message = {
             "type": "table_updated",
             "restaurant_id": restaurant_id,
             "table_id": table_id,
-            "action": action,
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "data": {
                 "id": table_id,
-                "tableNumber": table_data.get('table_number', table_data.get('tableNumber', 'Unknown')),
-                "capacity": table_data.get('capacity', 4),
-                "status": table_data.get('status', 'available'),
-                "position": {
-                    "x": float(table_data.get('x', table_data.get('position_x', 0.0))),
-                    "y": float(table_data.get('y', table_data.get('position_y', 0.0)))
-                },
-                "shape": table_data.get('shape', 'rectangle'),
-                "section": table_data.get('section', ''),
-                "currentGuestId": table_data.get('current_guest_id', table_data.get('guest_id')),
-                "updatedAt": datetime.utcnow().isoformat() + "Z"
+                "status": table_data.get('status'),
+                "guest_id": table_data.get('guest_id')
             }
         }
-        
-        # Add debug logging to track what we're sending
-        logger.info(f"📡 Broadcasting table_updated to all clients for restaurant {restaurant_id}")
-        logger.info(f"🎯 Table {table_id} action: {action}, status: {table_data.get('status')}")
-        logger.debug(f"📄 Message: {message}")
-        
         await self.broadcast_data_change(restaurant_id, message)
-        
-        logger.info(f"✅ Successfully broadcasted table_updated for table {table_id}")
     
     async def broadcast_atomic_transaction_complete(self, restaurant_id: str, affected_entities: List[str]):
         """Broadcast atomic transaction completion"""
@@ -204,14 +178,7 @@ class RealtimeDataBroadcaster:
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "affected_entities": affected_entities
         }
-        
-        logger.info(f"📡 Broadcasting atomic_transaction_complete to all clients for restaurant {restaurant_id}")
-        logger.info(f"🎯 Affected entities: {affected_entities}")
-        logger.debug(f"📄 Message: {message}")
-        
         await self.broadcast_data_change(restaurant_id, message)
-        
-        logger.info(f"✅ Successfully broadcasted atomic_transaction_complete")
     
     def get_connection_stats(self) -> Dict:
         """Get connection statistics for monitoring"""
