@@ -32,6 +32,8 @@ class RedisRealtimeBroadcaster:
         try:
             # Try to connect to Redis (Railway provides REDIS_URL)
             redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
+            logger.info(f"🔴 [WORKER-{self.worker_id}] Attempting Redis connection to: {redis_url[:20]}...")
+            
             self.redis_client = redis.from_url(redis_url, decode_responses=True)
             
             # Test connection
@@ -40,12 +42,13 @@ class RedisRealtimeBroadcaster:
             # Create pubsub client
             self.pubsub = self.redis_client.pubsub()
             
-            logger.info(f"🔴 [WORKER-{self.worker_id}] Redis initialized successfully")
+            logger.info(f"🔴 [WORKER-{self.worker_id}] ✅ Redis initialized successfully!")
             return True
             
         except Exception as e:
-            logger.warning(f"🔴 [WORKER-{self.worker_id}] Redis connection failed: {e}")
-            logger.warning(f"🔴 [WORKER-{self.worker_id}] Falling back to single-worker mode")
+            logger.warning(f"🔴 [WORKER-{self.worker_id}] ❌ Redis connection failed: {e}")
+            logger.warning(f"🔴 [WORKER-{self.worker_id}] 🔄 Falling back to single-worker mode")
+            logger.warning(f"🔴 [WORKER-{self.worker_id}] 💡 Check if REDIS_URL environment variable is set")
             self.redis_client = None
             self.pubsub = None
             return False
