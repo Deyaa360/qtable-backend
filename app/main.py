@@ -76,6 +76,15 @@ async def startup_event():
     logger.info(f"📊 Environment: {settings.environment}")
     logger.info(f"🗄️  Database: {settings.database_url[:50]}...")
     
+    # Initialize Redis broadcaster for cross-worker WebSocket communication
+    try:
+        from app.utils.redis_broadcaster import redis_broadcaster
+        await redis_broadcaster.initialize_redis()
+        logger.info("🔴 Redis broadcaster initialized")
+    except Exception as e:
+        logger.warning(f"🔴 Redis broadcaster initialization failed: {e}")
+        logger.warning("🔴 WebSocket broadcasting will work in single-worker mode only")
+    
     # Initialize database on startup
     try:
         from app.database import engine, Base, SessionLocal

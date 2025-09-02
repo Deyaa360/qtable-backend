@@ -9,7 +9,7 @@ from app.schemas import GuestResponse, GuestCreate, GuestUpdate
 from app.dependencies import get_current_user, verify_restaurant_access
 from app.utils.database_helper import log_activity
 from app.utils.cache import cached, invalidate_cache_pattern
-from app.utils.realtime_broadcaster import realtime_broadcaster
+from app.utils.redis_broadcaster import redis_broadcaster as realtime_broadcaster
 from app.api.websockets import broadcast_guest_created, broadcast_guest_updated, broadcast_guest_deleted, broadcast_table_updated, broadcast_guest_data_change
 
 router = APIRouter(prefix="/restaurants", tags=["guests"])

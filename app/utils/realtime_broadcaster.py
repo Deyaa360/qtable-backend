@@ -228,6 +228,14 @@ class RealtimeDataBroadcaster:
         
         logger.info(f"✅ Successfully broadcasted atomic_transaction_complete")
     
+    async def broadcast_to_all_workers(self, restaurant_id: str, message: dict):
+        """
+        Compatibility method for batch.py - just calls the regular broadcast_data_change.
+        In the future, this will be replaced with Redis pub/sub for true cross-worker broadcasting.
+        """
+        logger.warning(f"🔄 [COMPATIBILITY] broadcast_to_all_workers called - using regular broadcast for now")
+        await self.broadcast_data_change(restaurant_id, message)
+    
     def get_connection_stats(self):
         """Get statistics about current WebSocket connections"""
         total_connections = sum(len(connections) for connections in self.connections.values())

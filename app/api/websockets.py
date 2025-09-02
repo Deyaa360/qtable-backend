@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from app.dependencies import verify_token
 from app.models import Guest, RestaurantTable
 from app.utils.websocket_manager import connection_manager, optimized_guest_broadcast, optimized_table_broadcast
-from app.utils.realtime_broadcaster import realtime_broadcaster
+from app.utils.redis_broadcaster import redis_broadcaster as realtime_broadcaster
 import logging
 
 router = APIRouter(tags=["websockets"])

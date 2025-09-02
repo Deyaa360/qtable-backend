@@ -8,7 +8,7 @@ from app.models import RestaurantTable, Restaurant, User, Guest
 from app.schemas import TableResponse, TableCreate, TableUpdate, Position
 from app.dependencies import get_current_user, verify_restaurant_access
 from app.utils.database_helper import log_activity
-from app.utils.realtime_broadcaster import realtime_broadcaster
+from app.utils.redis_broadcaster import redis_broadcaster as realtime_broadcaster
 from app.api.websockets import broadcast_table_updated, broadcast_table_data_change, broadcast_guest_updated
 
 router = APIRouter(prefix="/restaurants", tags=["tables"])

@@ -8,7 +8,7 @@ from app.schemas.batch import BatchUpdateRequest, BatchUpdateResponse, BatchGues
 from app.schemas.table import Position
 from app.dependencies import get_current_user, verify_restaurant_access
 from app.utils.database_helper import log_activity
-from app.utils.realtime_broadcaster import realtime_broadcaster
+from app.utils.redis_broadcaster import redis_broadcaster as realtime_broadcaster
 import logging
 
 router = APIRouter(prefix="/restaurants", tags=["batch-operations"])
