@@ -232,9 +232,9 @@ async def batch_update(
                     "guestName": f"{guest.firstName or ''} {guest.lastName or ''}".strip(),
                     "firstName": guest.firstName or '',
                     "lastName": guest.lastName or '',
-                    "partySize": guest.party_size or 1,
+                    "partySize": guest.partySize or 1,
                     "status": guest.status,
-                    "table_id": str(guest.table_id) if guest.table_id else None,
+                    "table_id": str(guest.tableId) if guest.tableId else None,
                     "email": guest.email or '',
                     "phone": guest.phone or '',
                     "notes": guest.notes or ''
