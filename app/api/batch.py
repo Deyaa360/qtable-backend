@@ -211,7 +211,52 @@ async def batch_update(
         # Commit all changes atomically
         db.commit()
         
-        # 🚀 REAL-TIME BROADCAST: PRIORITY #4 - Atomic transaction complete
+        # 🚀 REAL-TIME BROADCAST: Send individual entity updates first
+        try:
+            # Broadcast individual guest updates (iOS requires these!)
+            for guest in updated_guests:
+                guest_data = {
+                    "guestName": f"{guest.first_name or ''} {guest.last_name or ''}".strip(),
+                    "firstName": guest.first_name or '',
+                    "lastName": guest.last_name or '',
+                    "partySize": guest.party_size or 1,
+                    "status": guest.status,
+                    "table_id": str(guest.table_id) if guest.table_id else None,
+                    "email": guest.email or '',
+                    "phone": guest.phone or '',
+                    "notes": guest.notes or ''
+                }
+                
+                await realtime_broadcaster.broadcast_guest_updated(
+                    restaurant_id=restaurant_id,
+                    guest_id=str(guest.id),
+                    action="status_changed",  # Primary action for batch updates
+                    guest_data=guest_data
+                )
+                logger.info(f"📡 [BATCH] Broadcasted guest_updated for guest {guest.id}")
+            
+            # Broadcast individual table updates
+            for table in updated_tables:
+                await realtime_broadcaster.broadcast_table_updated(
+                    restaurant_id=restaurant_id,
+                    table_id=str(table.id),
+                    action="status_changed",
+                    table_data={
+                        "id": str(table.id),
+                        "table_number": table.table_number,
+                        "status": table.status,
+                        "current_guest_id": str(table.current_guest_id) if table.current_guest_id else None,
+                        "capacity": table.capacity,
+                        "x": table.x,
+                        "y": table.y
+                    }
+                )
+                logger.info(f"📡 [BATCH] Broadcasted table_updated for table {table.id}")
+                
+        except Exception as e:
+            logger.error(f"Failed to broadcast individual entity updates: {e}")
+        
+        # 🚀 REAL-TIME BROADCAST: PRIORITY #4 - Atomic transaction complete AFTER individual updates
         try:
             affected_entities = []
             for guest in updated_guests:
@@ -223,9 +268,9 @@ async def batch_update(
                 restaurant_id=restaurant_id,
                 affected_entities=affected_entities
             )
-            logger.info(f"📡 Real-time broadcast sent for atomic transaction: {len(affected_entities)} entities")
+            logger.info(f"📡 [BATCH] Broadcasted atomic_transaction_complete: {len(affected_entities)} entities")
         except Exception as e:
-            logger.warning(f"Failed to broadcast atomic_transaction_complete: {e}")
+            logger.error(f"Failed to broadcast atomic_transaction_complete: {e}")
         
         # Log the batch operation
         log_activity(
