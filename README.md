@@ -227,3 +227,4 @@ For questions or issues:
 ---
 
 **Ready to power restaurant operations! 🍽️**
+# Force redeploy with single worker config
