@@ -234,7 +234,7 @@ async def batch_update(
                     "lastName": guest.lastName or '',
                     "partySize": guest.partySize or 1,
                     "status": guest.status,
-                    "table_id": str(guest.tableId) if guest.tableId else None,
+                    "tableId": str(guest.tableId) if guest.tableId else None,
                     "email": guest.email or '',
                     "phone": guest.phone or '',
                     "notes": guest.notes or ''
