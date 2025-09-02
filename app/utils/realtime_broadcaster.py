@@ -139,7 +139,7 @@ class RealtimeDataBroadcaster:
                 "lastName": guest_data.get('lastName', ''),
                 "partySize": guest_data.get('partySize', guest_data.get('party_size', 1)),
                 "status": guest_data.get('status'),
-                "table_id": guest_data.get('table_id'),
+                "tableId": guest_data.get('tableId', guest_data.get('table_id')),
                 "email": guest_data.get('email', ''),
                 "phone": guest_data.get('phone', ''),
                 "notes": guest_data.get('notes', '')
