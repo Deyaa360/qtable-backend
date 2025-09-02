@@ -198,17 +198,10 @@ async def update_table(
         
         await realtime_broadcaster.broadcast_table_updated(
             restaurant_id=restaurant_id,
-            action=action,
             table_id=str(table.id),
             table_data={
                 "status": table.status,
-                "guest_id": str(table.current_guest_id) if table.current_guest_id else None,
-                "table_number": table.table_number,
-                "capacity": table.capacity,
-                "position_x": table.position_x or 0.0,
-                "position_y": table.position_y or 0.0,
-                "shape": table.shape,
-                "section": table.section
+                "guest_id": str(table.current_guest_id) if table.current_guest_id else None
             }
         )
         logger.info(f"📡 Real-time broadcast sent for table update: {table.id}")
